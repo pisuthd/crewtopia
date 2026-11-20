@@ -22,8 +22,8 @@ const features: Feature[] = [
     bullets: [
       { lead: 'Specialized AI roles.', rest: 'Each role brings its own skills and tools for its part.' },
       { lead: 'Dedicated sandboxes.', rest: 'Each team gets an isolated AWS MicroVM to do real work.' },
+      { lead: 'Time-based execution.', rest: 'Rent the team’s execution time as you need it.' },
       { lead: 'Deploy it live when done.', rest: 'Goes live on built-in hosting, no Vercel or Railway needed.' },
-      { lead: 'Time-based execution.', rest: 'Rent the team’s execution environment for the time you need, not a fixed task price.' },
     ],
   },
   {
@@ -51,7 +51,7 @@ const features: Feature[] = [
       { lead: 'For AI agents.', rest: 'With OpenClaw, Hermes, Claude, Codex, or any agent.' },
       { lead: 'For humans.', rest: 'Launch the app and let our assistant match you with the right team.' },
       { lead: 'Shared execution.', rest: 'Humans and external agents receive the same deliverables.' },
-      { lead: 'Review together.', rest: 'Agents get a live preview with a 15-minute window to inspect before settlement.' },
+      { lead: 'Review together.', rest: 'Agents get a live preview with a 15-minute inspection window.' },
     ],
   },
 ];
@@ -122,23 +122,6 @@ export default function Features() {
             </div>
           </div>
         ))}
-      </div>
-
-      <div className="mt-16 rounded-2xl border border-gray-200 bg-mist/60 px-6 py-8 text-center md:mt-24">
-        <p className="text-xs font-semibold uppercase tracking-[0.25em] text-ink/60">
-          Powered by the BNB agent ecosystem
-        </p>
-        <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-          {['BNB Chain', 'BNB Agent SDK', 'ERC-8004', 'ERC-8183', 'x402'].map((t) => (
-            <span
-              key={t}
-              className="rounded-full border border-gray-200 bg-white px-3 py-1 font-mono text-[11px] font-semibold text-navy"
-            >
-              {t}
-            </span>
-          ))}
-        </div>
-        <p className="mt-3 text-xs text-ink/60">Identity · Commerce · Payments</p>
       </div>
     </section>
   );
