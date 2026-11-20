@@ -1,0 +1,54 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+/* Swarmly Hexbot keyframes (visor LEDs — distinct from Wayfind blob blink). */
+@keyframes hexbot-blink {
+  0%, 90%, 100% { opacity: 1; }
+  93%, 96% { opacity: 0.15; }
+}
+
+@keyframes hexbot-scan {
+  0%, 100% { transform: translateX(0); opacity: 0.25; }
+  50% { transform: translateX(220%); opacity: 0.5; }
+}
+
+@keyframes hexbot-hover {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+.animate-hexbot-blink { animation: hexbot-blink 4.6s ease-in-out infinite; }
+.animate-hexbot-scan { animation: hexbot-scan 3.8s ease-in-out infinite; }
+.animate-hexbot-hover { animation: hexbot-hover 5s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-hexbot-blink,
+  .animate-hexbot-scan,
+  .animate-hexbot-hover { animation: none; }
+}
+
+/* Card entrance. */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+.fade-up { animation: fade-up 0.35s ease both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-up { animation: none; }
+}
+
+/* Pricing band — BNB dark with honey glow. */
+.band {
+  background: radial-gradient(600px 300px at 50% 0%, rgba(240, 185, 11, 0.25), transparent 65%), #0B0E11;
+}
