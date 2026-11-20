@@ -10,15 +10,11 @@ import Pricing from './Pricing';
 import Faq from './Faq';
 import Footer from './Footer';
 
-interface LandingProps {
-  onSignIn: () => void;
-}
-
-export default function Landing({ onSignIn }: LandingProps) {
+export default function Landing() {
   return (
     <main className="bg-white text-navy">
       <Navbar />
-      <Hero onSignIn={onSignIn} />
+      <Hero />
       <LivePreview />
       <Features />
       <Teams />
