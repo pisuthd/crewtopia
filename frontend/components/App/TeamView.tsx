@@ -2,6 +2,7 @@
 
 import { Menu, Send } from 'lucide-react';
 import Hexbot from '../Hexbot';
+import EmberChat from './EmberChat';
 import type { MockBot } from './mockTeam';
 
 interface TeamViewProps {
@@ -37,30 +38,34 @@ export default function TeamView({ bot, onOpenSidebar }: TeamViewProps) {
       </header>
 
       {bot ? (
-        <>
-          <div className="grid flex-1 place-items-center px-6">
-            <div className="max-w-sm text-center">
-              <div className="mx-auto mb-4 w-fit">
-                <Hexbot color={bot.color} size="md" role={bot.hexRole} label={`${bot.name} hexbot`} />
+        bot.id === 'ember' ? (
+          <EmberChat bot={bot} />
+        ) : (
+          <>
+            <div className="grid flex-1 place-items-center px-6">
+              <div className="max-w-sm text-center">
+                <div className="mx-auto mb-4 w-fit">
+                  <Hexbot color={bot.color} size="md" role={bot.hexRole} label={`${bot.name} hexbot`} />
+                </div>
+                <p className="font-brico text-xl font-bold text-wfnavy">{bot.name}</p>
+                <p className="mt-1 text-sm text-wfink">{bot.description}</p>
+                {/* TODO: thread + composer land here (chat send, history) */}
+                <p className="mt-3 text-xs text-wfink">Chat with {bot.name} lands here.</p>
               </div>
-              <p className="font-brico text-xl font-bold text-wfnavy">{bot.name}</p>
-              <p className="mt-1 text-sm text-wfink">{bot.description}</p>
-              {/* TODO: thread + composer land here (chat send, history) */}
-              <p className="mt-3 text-xs text-wfink">Chat with {bot.name} lands here.</p>
             </div>
-          </div>
 
-          <div className="px-4 pb-4">
-            <div className="flex items-center gap-2 rounded-2xl border border-wfnavy/10 bg-white px-4 py-3 opacity-60">
-              <input
-                disabled
-                placeholder={`Message ${bot.name}… (coming soon)`}
-                className="w-full bg-transparent text-sm text-wfnavy outline-none placeholder:text-wfink"
-              />
-              <Send className="h-4 w-4 shrink-0 text-wfink" strokeWidth={2.2} />
+            <div className="px-4 pb-4">
+              <div className="flex items-center gap-2 rounded-2xl border border-wfnavy/10 bg-white px-4 py-3 opacity-60">
+                <input
+                  disabled
+                  placeholder={`Message ${bot.name}… (coming soon)`}
+                  className="w-full bg-transparent text-sm text-wfnavy outline-none placeholder:text-wfink"
+                />
+                <Send className="h-4 w-4 shrink-0 text-wfink" strokeWidth={2.2} />
+              </div>
             </div>
-          </div>
-        </>
+          </>
+        )
       ) : (
         <div className="grid flex-1 place-items-center px-6">
           <div className="max-w-sm text-center">

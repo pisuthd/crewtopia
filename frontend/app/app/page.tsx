@@ -9,9 +9,11 @@ import { SessionProvider } from '@/components/App/SessionContext';
 function AppPageInner() {
   const params = useSearchParams();
   const start = params.get('start');
-  // ?start=ember preselects the assistant; anything else opens unselected.
+  // ?start=ember preselects the assistant only if the database confirms
+  // the assignment — otherwise the picker modal is prompted instead.
   const initialId = start === 'ember' ? 'ember' : undefined;
-  return <AppShell initialId={initialId} />;
+  const promptAssistant = start === 'ember';
+  return <AppShell initialId={initialId} promptAssistant={promptAssistant} />;
 }
 
 export default function AppPage() {

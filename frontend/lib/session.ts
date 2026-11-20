@@ -6,6 +6,8 @@ const API = process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, '') ?? '';
 export interface Profile {
   walletAddress: string;
   displayName: string | null;
+  assistantId: string | null;
+  assistantAssignedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }

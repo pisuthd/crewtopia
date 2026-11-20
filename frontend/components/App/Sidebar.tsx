@@ -2,13 +2,14 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Check, Copy, Fingerprint, LogOut, Pencil, Search, Users, Wallet } from 'lucide-react';
+import { Check, Copy, Fingerprint, LogOut, Pencil, Search, Sparkles, Users, Wallet } from 'lucide-react';
 import Hexbot from '../Hexbot';
 import { brandName } from '@/lib/site';
 import type { MockBot } from './mockTeam';
 import { useSession } from './SessionContext';
 import { useWallet } from './WalletContext';
 import WalletModal from './WalletModal';
+import AssistantModal from './AssistantModal';
 import ConnectorsModal from './ConnectorsModal';
 import { truncateAddress } from '@/lib/wallet';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -24,6 +25,7 @@ interface SidebarProps {
   onToggleSearch: () => void;
   open: boolean;
   onClose: () => void;
+  promptAssistant?: boolean;
 }
 
 function Section({
@@ -90,8 +92,21 @@ export default function Sidebar({
   onToggleSearch,
   open,
   onClose,
+  promptAssistant,
 }: SidebarProps) {
   const [modalOpen, setModalOpen] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const dismissed = useRef(false);
+  const { profile, ready } = useSession();
+  const emberAssigned = profile?.assistantId === 'ember';
+
+  // ?start=ember with no assignment → prompt the picker once the database
+  // answer is in. Never before (no flashing), never after dismiss.
+  useEffect(() => {
+    if (promptAssistant && ready && !emberAssigned && !dismissed.current) {
+      setAssistantOpen(true);
+    }
+  }, [promptAssistant, ready, emberAssigned]);
   return (
     <>
       <div
@@ -140,9 +155,27 @@ export default function Sidebar({
         )}
 
         <nav className="flex-1 space-y-3 overflow-y-auto px-3 py-1" aria-label="My team">
-          <Section title={null} bots={assistant} startIndex={0} selectedId={selectedId} onSelect={onSelect} />
+          {emberAssigned ? (
+            <Section title={null} bots={assistant} startIndex={0} selectedId={selectedId} onSelect={onSelect} />
+          ) : (
+            <button
+              onClick={() => ready && setAssistantOpen(true)}
+              disabled={!ready}
+              className={`flex w-full items-center gap-3 rounded-2xl border-2 border-dashed border-wfnavy/20 p-3 text-left transition hover:border-wfcta/60 hover:bg-white/60 disabled:cursor-wait ${
+                !ready ? 'animate-pulse' : ''
+              }`}
+            >
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white shadow-sm">
+                <Sparkles className="h-5 w-5 text-wfcta" strokeWidth={2.2} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-bold text-wfnavy">Choose your AI assistant</span>
+                <span className="block truncate text-sm text-wfink">1 assistant available</span>
+              </span>
+            </button>
+          )}
           <Section title={team.name} bots={team.members} startIndex={assistant.length} selectedId={selectedId} onSelect={onSelect} />
-          {assistant.length === 0 && team.members.length === 0 && (
+          {assistant.length === 0 && team.members.length === 0 && emberAssigned && (
             <p className="px-3 py-4 text-sm text-wfink">No matches.</p>
           )}
         </nav>
@@ -153,6 +186,13 @@ export default function Sidebar({
         </div>
       </aside>
       <WalletModal open={modalOpen} onClose={() => setModalOpen(false)} />
+      <AssistantModal
+        open={assistantOpen}
+        onClose={() => {
+          dismissed.current = true;
+          setAssistantOpen(false);
+        }}
+      />
     </>
   );
 }
