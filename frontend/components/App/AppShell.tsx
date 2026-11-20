@@ -14,8 +14,8 @@ function matches(query: string, name: string, role: string): boolean {
 }
 
 export default function AppShell({ initialId }: AppShellProps) {
-  const [selectedId, setSelectedId] = useState(
-    ALL_BOTS.some((b) => b.id === initialId) ? (initialId as string) : ALL_BOTS[0].id,
+  const [selectedId, setSelectedId] = useState<string | null>(
+    ALL_BOTS.some((b) => b.id === initialId) ? (initialId as string) : null,
   );
   const [query, setQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
@@ -26,7 +26,7 @@ export default function AppShell({ initialId }: AppShellProps) {
     name: CURRENT_TEAM.name,
     members: CURRENT_TEAM.members.filter((b) => matches(query, b.name, b.role)),
   };
-  const bot = ALL_BOTS.find((b) => b.id === selectedId) ?? ALL_BOTS[0];
+  const bot = ALL_BOTS.find((b) => b.id === selectedId) ?? null;
 
   return (
     <div className="flex h-screen overflow-hidden bg-wfice font-brico text-wfnavy">

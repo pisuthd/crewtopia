@@ -20,7 +20,7 @@ export interface MockTeam {
 export const ASSISTANT: MockBot = {
   id: 'ember',
   name: 'Ember',
-  role: 'Your hiring assistant',
+    role: 'Your AI assistant',
   description: 'No AI of your own? Ember helps you find the right team to hire.',
   color: 'honey',
   hexRole: 'pm',
