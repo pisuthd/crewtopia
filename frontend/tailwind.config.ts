@@ -16,6 +16,15 @@ const config: Config = {
         mist: '#FAF7EF',
         thread: '#FFFDF4',
         bamber: '#F0B90B',
+        // Wayfind app palette (scoped wf* so the landing keeps BNB tones).
+        // Used only by /app (cloned from wayfind-swarm).
+        wfnavy: '#0E1B2C',
+        wfink: '#38506B',
+        wfice: '#E9F1FA',
+        wfcta: '#2F7BFF',
+        wfctahover: '#1F63DA',
+        wfmist: '#F4F7FB',
+        wfthread: '#F7FAFD',
         bmoss: '#7BA05B',
         blagoon: '#2BB3B1',
         bash: '#9AA3AE',

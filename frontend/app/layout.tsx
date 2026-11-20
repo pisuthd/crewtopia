@@ -30,7 +30,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className={`${brico.variable} ${display.variable} ${jbmono.variable} bg-mist font-display text-navy antialiased`}>
+      <body className={`${brico.variable} ${display.variable} ${jbmono.variable} font-display text-navy antialiased`}>
         {children}
       </body>
     </html>
