@@ -6,11 +6,15 @@ import { EMBER_WS_URL, getChatHistory, type ChatMessage, type ContextStats } fro
 export type EmberStatus = 'idle' | 'loading' | 'connecting' | 'streaming' | 'error';
 
 interface WsIncoming {
-  type: 'start' | 'token' | 'done' | 'error';
+  type: 'start' | 'status' | 'token' | 'done' | 'error';
   text?: string;
   error?: string;
   context?: ContextStats;
 }
+
+// Exactly-once greeting per assistant per page load (StrictMode-safe).
+// The backend is the real guard (hello only fires on empty history).
+const helloAttempted = new Set<string>();
 
 /**
  * Streaming Ember chat over the protected WebSocket (JWT in ?token=).
@@ -24,15 +28,18 @@ export function useEmberChat(token: string | null, assistantId: string, active: 
   const [context, setContext] = useState<ContextStats | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const retried = useRef(false);
+  const historyDone = useRef(false);
 
   // Initial transcript (+ context seeding).
   useEffect(() => {
     if (!token || !active) return;
     let alive = true;
+    historyDone.current = false;
     setStatus('loading');
     getChatHistory(token, assistantId)
       .then(({ messages: msgs, context: ctx }) => {
         if (alive) {
+          historyDone.current = true;
           setMessages(msgs);
           setContext(ctx);
           setStatus('idle');
@@ -40,6 +47,7 @@ export function useEmberChat(token: string | null, assistantId: string, active: 
       })
       .catch((e: unknown) => {
         if (alive) {
+          historyDone.current = true;
           setError(e instanceof Error ? e.message : String(e));
           setStatus('error');
         }
@@ -82,12 +90,19 @@ export function useEmberChat(token: string | null, assistantId: string, active: 
   }, [token]);
 
   const send = useCallback(
-    async (text: string) => {
+    async (text: string, opts?: { hello?: boolean }) => {
+      const hello = opts?.hello === true;
       const v = text.trim();
-      if (!v || status === 'streaming') return;
+      if ((!hello && !v) || status === 'streaming') return;
+      // Hello runs are Ember-initiated: no user bubble, failures stay silent
+      // so the thread simply starts empty.
+      if (hello) {
+        if (helloAttempted.has(assistantId)) return;
+        helloAttempted.add(assistantId);
+      }
       setError(null);
       const at = new Date().toISOString();
-      setMessages((prev) => [...prev, { role: 'user', text: v, at }]);
+      if (!hello) setMessages((prev) => [...prev, { role: 'user', text: v, at }]);
       setStreaming('');
       try {
         const ws = await ensureSocket();
@@ -121,10 +136,21 @@ export function useEmberChat(token: string | null, assistantId: string, active: 
             clearTimeout(timer);
             reject(new Error('chat connection dropped'));
           };
-          ws.send(JSON.stringify({ action: 'chat', assistantId, message: v }));
+          ws.send(
+            hello
+              ? JSON.stringify({ action: 'chat', assistantId, hello: true })
+              : JSON.stringify({ action: 'chat', assistantId, message: v }),
+          );
         });
         retried.current = false;
       } catch (e: unknown) {
+        if (hello) {
+          // Silent: a failed greeting leaves a clean thread.
+          wsRef.current = null;
+          setStreaming('');
+          setStatus('idle');
+          return;
+        }
         // One transparent reconnect, then surface the error.
         wsRef.current = null;
         if (!retried.current) {
@@ -140,6 +166,18 @@ export function useEmberChat(token: string | null, assistantId: string, active: 
     },
     [assistantId, ensureSocket, status],
   );
+
+  const sendRef = useRef(send);
+  sendRef.current = send;
+
+  // Greet on empty threads: history loaded empty + signed in → hidden hello run.
+  useEffect(() => {
+    if (!token || !active || !historyDone.current) return;
+    if (messages.length > 0 || status === 'loading' || status === 'streaming' || status === 'error') return;
+    if (helloAttempted.has(assistantId)) return;
+    void sendRef.current('', { hello: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, active, messages.length, status, assistantId]);
 
   return { messages, streaming, status, error, context, send };
 }

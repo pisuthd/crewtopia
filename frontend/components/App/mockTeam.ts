@@ -67,3 +67,11 @@ export const CURRENT_TEAM: MockTeam = {
 
 /** Flat lookup for selection (assistant + all members). */
 export const ALL_BOTS: MockBot[] = [ASSISTANT, ...CURRENT_TEAM.members];
+
+/** Display meta for live crew members — mirrors backend lambda/ember/teams.ts ROSTER. */
+export const MEMBER_META: Record<string, { name: string; title: string; color: HexbotColor; hexRole: HexbotRole; description: string }> = {
+  pm: { name: 'Pippa', title: 'Project Manager', color: 'honey', hexRole: 'pm', description: 'Scopes milestones and tracks acceptance.' },
+  ux: { name: 'Uxu', title: 'UX/UI Designer', color: 'lagoon', hexRole: 'ux', description: 'Flows, wireframes, component specs.' },
+  frontend: { name: 'Fonti', title: 'Frontend Developer', color: 'blue', hexRole: 'frontend', description: 'Builds the dapp and its preview.' },
+  backend: { name: 'Bex', title: 'Backend Developer', color: 'grape', hexRole: 'backend', description: 'APIs, DB/auth, on-chain wiring.' },
+};

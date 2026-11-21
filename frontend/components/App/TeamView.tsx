@@ -5,17 +5,21 @@ import { Menu, PanelRight, Send } from 'lucide-react';
 import Hexbot from '../Hexbot';
 import EmberChat from './EmberChat';
 import EmberPanel from './EmberPanel';
+import MemberChat from './MemberChat';
+import { MEMBER_META } from './mockTeam';
 import type { MockBot } from './mockTeam';
 
 interface TeamViewProps {
   bot: MockBot | null;
+  memberTaskId: string | null;
+  memberRole: string | null;
   onOpenSidebar: () => void;
   onDeletedAssistant: () => void;
 }
 
-export default function TeamView({ bot, onOpenSidebar, onDeletedAssistant }: TeamViewProps) {
+export default function TeamView({ bot, memberTaskId, memberRole, onOpenSidebar, onDeletedAssistant }: TeamViewProps) {
   const [panelOpen, setPanelOpen] = useState(false);
-  const [model, setModel] = useState<string | null>(null);
+  const memberMeta = memberTaskId && memberRole ? MEMBER_META[memberRole] ?? null : null;
   const isEmber = bot?.id === 'ember';
 
   return (
@@ -30,20 +34,28 @@ export default function TeamView({ bot, onOpenSidebar, onDeletedAssistant }: Tea
           <Menu className="h-4 w-4" strokeWidth={2.2} />
         </button>
         <span className="hidden w-40 md:block" />
-        {bot ? (
+        {memberMeta && memberTaskId && memberRole ? (
+          <div className="mx-auto flex items-center gap-2.5 rounded-full bg-white py-2 pl-3 pr-5 font-bold text-wfnavy shadow-md shadow-wfnavy/5">
+            <Hexbot color={memberMeta.color} size="xs" role={memberMeta.hexRole} label={`${memberMeta.name} hexbot`} />
+            <span>{memberMeta.name}</span>
+            <span className="hidden text-sm font-medium text-wfink sm:inline">
+              · {memberMeta.title}
+            </span>
+          </div>
+        ) : bot ? (
           isEmber ? (
-            <button
-              onClick={() => setPanelOpen((o) => !o)}
-              aria-expanded={panelOpen}
-              aria-label="Assistant info"
-              className="mx-auto flex items-center gap-2.5 rounded-full bg-white py-2 pl-3 pr-5 font-bold text-wfnavy shadow-md shadow-wfnavy/5 hover:bg-slate-50"
-            >
-              <Hexbot color={bot.color} size="xs" role={bot.hexRole} label={`${bot.name} hexbot`} />
-              <span>{bot.name}</span>
-              <span className="hidden text-sm font-medium text-wfink sm:inline">
-                · {bot.role}
-              </span>
-            </button>
+          <button
+            onClick={() => setPanelOpen((o) => !o)}
+            aria-expanded={panelOpen}
+            aria-label="Assistant info"
+            className="mx-auto flex items-center gap-2.5 rounded-full bg-white py-2 pl-3 pr-5 font-bold text-wfnavy shadow-md shadow-wfnavy/5 hover:bg-slate-50"
+          >
+            <Hexbot color={bot.color} size="xs" role={bot.hexRole} label={`${bot.name} hexbot`} />
+            <span>{bot.name}</span>
+            <span className="hidden text-sm font-medium text-wfink sm:inline">
+              · {bot.role}
+            </span>
+          </button>
           ) : (
           <div className="mx-auto flex items-center gap-2.5 rounded-full bg-white py-2 pl-3 pr-5 font-bold text-wfnavy shadow-md shadow-wfnavy/5">
             <Hexbot color={bot.color} size="xs" role={bot.hexRole} label={`${bot.name} hexbot`} />
@@ -73,9 +85,19 @@ export default function TeamView({ bot, onOpenSidebar, onDeletedAssistant }: Tea
         )}
       </header>
 
-      {bot ? (
+      {memberMeta && memberTaskId && memberRole ? (
+        <MemberChat
+          taskId={memberTaskId}
+          role={memberRole}
+          name={memberMeta.name}
+          title={memberMeta.title}
+          color={memberMeta.color}
+          hexRole={memberMeta.hexRole}
+          description={memberMeta.description}
+        />
+      ) : bot ? (
         bot.id === 'ember' ? (
-          <EmberChat bot={bot} onModel={setModel} />
+          <EmberChat bot={bot} />
         ) : (
           <>
             <div className="grid flex-1 place-items-center px-6">
@@ -118,7 +140,6 @@ export default function TeamView({ bot, onOpenSidebar, onDeletedAssistant }: Tea
         open={panelOpen}
         onClose={() => setPanelOpen(false)}
         bot={bot}
-        model={model}
         onDeleted={onDeletedAssistant}
       />
     )}

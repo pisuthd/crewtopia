@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Check, Copy, Droplets, Fingerprint, LogOut, Pencil, Search, Sparkles, Users, Wallet } from 'lucide-react';
+import { Droplets, LogIn, LogOut, Pencil, Search, Sparkles, Users, Wallet } from 'lucide-react';
 import Hexbot from '../Hexbot';
 import { brandName } from '@/lib/site';
 import type { MockBot } from './mockTeam';
@@ -13,6 +13,8 @@ import AssistantModal from './AssistantModal';
 import TokensModal from './TokensModal';
 import ConnectorsModal from './ConnectorsModal';
 import { truncateAddress } from '@/lib/wallet';
+import { getLiveTeam, type LiveCrew } from '@/lib/ember';
+import { MEMBER_META } from './mockTeam';
 import { AnimatePresence, motion } from 'framer-motion';
 
 interface SidebarProps {
@@ -102,8 +104,26 @@ export default function Sidebar({
   const [tokensOpen, setTokensOpen] = useState(false);
   const dismissed = useRef(false);
   const tokensDismissed = useRef(false);
-  const { profile, ready } = useSession();
+  const { profile, ready, token, signedIn } = useSession();
   const emberAssigned = profile?.assistantId === 'ember';
+  const [crews, setCrews] = useState<LiveCrew[]>([]);
+
+  // Live hired crews drive the member roster (mock rows stay as pre-hire fallback).
+  useEffect(() => {
+    if (!token || !signedIn) {
+      setCrews([]);
+      return;
+    }
+    let alive = true;
+    getLiveTeam(token).then((c) => alive && setCrews(c)).catch(() => {});
+    const t = setInterval(() => {
+      if (alive) getLiveTeam(token).then((c) => alive && setCrews(c)).catch(() => {});
+    }, 60000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, [token, signedIn]);
 
   // ?start=ember with no assignment → prompt the picker once the database
   // answer is in. Never before (no flashing), never after dismiss.
@@ -165,7 +185,7 @@ export default function Sidebar({
           </div>
         )}
 
-        <nav className="flex-1 space-y-3 overflow-y-auto px-3 py-1" aria-label="My team">
+        <nav className="flex flex-1 flex-col space-y-3 overflow-y-auto px-3 py-1" aria-label="My team">
           {emberAssigned ? (
             <Section title={null} bots={assistant} startIndex={0} selectedId={selectedId} onSelect={onSelect} />
           ) : (
@@ -185,8 +205,68 @@ export default function Sidebar({
               </span>
             </button>
           )}
-          <Section title={team.name} bots={team.members} startIndex={assistant.length} selectedId={selectedId} onSelect={onSelect} />
-          {assistant.length === 0 && team.members.length === 0 && emberAssigned && (
+          {crews.length > 0 ? (
+            crews.map((crew) => (
+            <section key={crew.taskId}>
+              <p className="flex items-center gap-1.5 px-1 pb-1 text-[11px] font-bold uppercase tracking-wider text-wfink/70">
+                <span className={`h-1.5 w-1.5 rounded-full ${crew.vmLive ? 'bg-green-500' : 'bg-amber-500'}`} />
+                {crew.team} · {crew.minutesLeft} min left
+              </p>
+              <div className="space-y-1">
+                {Object.keys(MEMBER_META).map((role, i) => {
+                  const meta = MEMBER_META[role];
+                  const id = `m:${crew.taskId}:${role}`;
+                  const selected = id === selectedId;
+                  return (
+                    <button
+                      key={id}
+                      onClick={() => onSelect(id)}
+                      className={`flex w-full items-center gap-3 rounded-2xl p-3 text-left transition ${
+                        selected ? 'bg-white shadow-sm' : 'hover:bg-white/60'
+                      }`}
+                    >
+                      <Hexbot color={meta.color} size="sm" role={meta.hexRole} blinkDelay={`-${i * 1.4}s`} label={`${meta.name} hexbot`} />
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center gap-1.5 font-bold text-wfnavy">
+                          <span className="truncate">{meta.name}</span>
+                        </span>
+                        <span className="block truncate text-sm text-wfink">{meta.title}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+            ))
+          ) : (
+            <button
+              onClick={() => {
+                if (!signedIn) {
+                  setModalOpen(true);
+                } else if (emberAssigned) {
+                  onSelect('ember');
+                  onClose();
+                } else if (ready) {
+                  setAssistantOpen(true);
+                }
+              }}
+              disabled={signedIn && !ready}
+              className={`flex min-h-44 w-full flex-1 flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-wfnavy/20 p-5 text-center transition hover:border-wfcta/60 hover:bg-white/60 disabled:cursor-wait ${
+                signedIn && !ready ? 'animate-pulse' : ''
+              }`}
+            >
+              <span className="grid h-12 w-12 place-items-center rounded-2xl bg-white shadow-sm">
+                <Users className="h-6 w-6 text-wfcta" strokeWidth={2.2} />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-bold text-wfnavy">Hire your AI team</span>
+                <span className="mt-0.5 block text-sm text-wfink">
+                  {!signedIn ? 'Connect a wallet, then hire via Ember' : 'Hire via Ember — your team will appear here when ready'}
+                </span>
+              </span>
+            </button>
+          )}
+          {assistant.length === 0 && crews.length === 0 && emberAssigned && (
             <p className="px-3 py-4 text-sm text-wfink">No matches.</p>
           )}
         </nav>
@@ -283,7 +363,6 @@ function WalletFooter({ onOpen, onRequestTokens }: { onOpen: () => void; onReque
   const { signedIn, signingIn, signIn, signOut, profile } = useSession();
   const [menuOpen, setMenuOpen] = useState(false);
   const [connectorsOpen, setConnectorsOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -301,12 +380,6 @@ function WalletFooter({ onOpen, onRequestTokens }: { onOpen: () => void; onReque
       document.removeEventListener('keydown', onKey);
     };
   }, [menuOpen]);
-
-  useEffect(() => {
-    if (!copied) return;
-    const t = setTimeout(() => setCopied(false), 1500);
-    return () => clearTimeout(t);
-  }, [copied]);
 
   if (!isConnected || !address) {
     return (
@@ -333,13 +406,6 @@ function WalletFooter({ onOpen, onRequestTokens }: { onOpen: () => void; onReque
       </button>
     );
   }
-
-  const copyAddress = async () => {
-    try {
-      await navigator.clipboard.writeText(address);
-      setCopied(true);
-    } catch {}
-  };
 
   const initial = (
     signedIn && profile?.displayName ? profile.displayName.charAt(0) : address.charAt(2)
@@ -378,18 +444,6 @@ function WalletFooter({ onOpen, onRequestTokens }: { onOpen: () => void; onReque
               <Droplets className="h-4 w-4" strokeWidth={2.2} />
               Request test $U
             </button>
-            <button
-              role="menuitem"
-              onClick={() => void copyAddress()}
-              className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm font-semibold text-wfnavy hover:bg-wfice"
-            >
-              {copied ? (
-                <Check className="h-4 w-4 text-green-600" strokeWidth={2.2} />
-              ) : (
-                <Copy className="h-4 w-4" strokeWidth={2.2} />
-              )}
-              {copied ? 'Copied!' : 'Copy address'}
-            </button>
             <div className="mx-4 my-1 border-t border-wfnavy/10" aria-hidden="true" />
             {!signedIn && (
               <button
@@ -401,7 +455,7 @@ function WalletFooter({ onOpen, onRequestTokens }: { onOpen: () => void; onReque
                 disabled={signingIn}
                 className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm font-semibold text-wfnavy hover:bg-wfice disabled:opacity-50"
               >
-                <Fingerprint className="h-4 w-4" strokeWidth={2.2} />
+                <LogIn className="h-4 w-4" strokeWidth={2.2} />
                 {signingIn ? 'Check your wallet…' : 'Sign in'}
               </button>
             )}

@@ -36,6 +36,10 @@ export default function AppShell({ initialId, promptAssistant, promptTokens }: A
     members: CURRENT_TEAM.members.filter((b) => matches(query, b.name, b.role)),
   };
   const bot = ALL_BOTS.find((b) => b.id === selectedId) ?? null;
+  // Live member selection: ids look like m:{taskId}:{role}.
+  const memberSel = selectedId?.startsWith('m:') ? selectedId.slice(2).split(':') : null;
+  const memberTaskId = memberSel && memberSel.length >= 2 ? memberSel[0] : null;
+  const memberRole = memberSel && memberSel.length >= 2 ? memberSel[memberSel.length - 1] : null;
 
   return (
     <div className="flex h-screen overflow-hidden bg-wfice font-brico text-wfnavy">
@@ -57,7 +61,9 @@ export default function AppShell({ initialId, promptAssistant, promptTokens }: A
         onClose={() => setSideOpen(false)}
       />
       <TeamView
-        bot={bot}
+        bot={memberTaskId ? null : bot}
+        memberTaskId={memberTaskId}
+        memberRole={memberRole}
         onOpenSidebar={() => setSideOpen(true)}
         onDeletedAssistant={() => setSelectedId(null)}
       />

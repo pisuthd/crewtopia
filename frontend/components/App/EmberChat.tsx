@@ -7,6 +7,8 @@ import { useSession } from './SessionContext';
 import { useEmberChat } from './useEmberChat';
 import Markdown from './Markdown';
 import ModelPicker from './ModelPicker';
+import FundCard from './FundCard';
+import { getPendingRent, type PendingRent } from '@/lib/ember';
 import type { ContextStats } from '@/lib/ember';
 import type { MockBot } from './mockTeam';
 
@@ -27,11 +29,25 @@ export default function EmberChat({ bot, onModel }: { bot: MockBot; onModel?: (m
   const { token } = useSession();
   const { messages, streaming, status, error, context, send } = useEmberChat(token, bot.id, true);
   const [draft, setDraft] = useState('');
+  const [pending, setPending] = useState<PendingRent | null>(null);
+  const [cardGone, setCardGone] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     onModel?.(context?.model ?? null);
   }, [context?.model, onModel]);
+
+  // Refresh the fundable quote whenever the transcript settles (a fresh
+  // rent_quote lands here right after Ember streams it).
+  useEffect(() => {
+    if (!token || status === 'streaming' || status === 'loading') return;
+    getPendingRent(token).then(setPending).catch(() => {});
+  }, [token, messages.length, status]);
+
+  const pendingId = pending?.taskId ?? null;
+  useEffect(() => {
+    setCardGone(false);
+  }, [pendingId]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -89,6 +105,16 @@ export default function EmberChat({ bot, onModel }: { bot: MockBot; onModel?: (m
       </div>
 
       <div className="px-4 pb-4">
+        {pending && !cardGone && token && (
+          <div className="mb-3">
+            <FundCard
+              key={pending.taskId}
+              pending={pending}
+              onFunded={() => getPendingRent(token).then(setPending).catch(() => {})}
+              onCleared={() => setCardGone(true)}
+            />
+          </div>
+        )}
         {!token ? (
           <p className="mx-auto max-w-2xl rounded-2xl border border-wfnavy/10 bg-white px-4 py-3 text-center text-sm text-wfink">
             Connect a wallet and sign in to chat with {bot.name}.
