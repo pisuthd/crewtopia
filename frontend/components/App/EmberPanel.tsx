@@ -6,12 +6,12 @@ import Hexbot from '../Hexbot';
 import DeleteChatModal from './DeleteChatModal';
 import { useSession } from './SessionContext';
 import { assignAssistant, deleteChatHistory, getLiveTeam, terminateSandbox, type LiveCrew } from '@/lib/ember';
-import type { MockBot } from './mockTeam';
+import type { SidebarBot } from './crew';
 
 interface EmberPanelProps {
   open: boolean;
   onClose: () => void;
-  bot: MockBot;
+  bot: SidebarBot;
   onDeleted: () => void;
 }
 

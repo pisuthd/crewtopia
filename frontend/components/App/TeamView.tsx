@@ -6,11 +6,11 @@ import Hexbot from '../Hexbot';
 import EmberChat from './EmberChat';
 import EmberPanel from './EmberPanel';
 import MemberChat from './MemberChat';
-import { MEMBER_META } from './mockTeam';
-import type { MockBot } from './mockTeam';
+import { CREW_META } from './crew';
+import type { SidebarBot } from './crew';
 
 interface TeamViewProps {
-  bot: MockBot | null;
+  bot: SidebarBot | null;
   memberTaskId: string | null;
   memberRole: string | null;
   onOpenSidebar: () => void;
@@ -19,7 +19,7 @@ interface TeamViewProps {
 
 export default function TeamView({ bot, memberTaskId, memberRole, onOpenSidebar, onDeletedAssistant }: TeamViewProps) {
   const [panelOpen, setPanelOpen] = useState(false);
-  const memberMeta = memberTaskId && memberRole ? MEMBER_META[memberRole] ?? null : null;
+  const memberMeta = memberTaskId && memberRole ? CREW_META[memberRole] ?? null : null;
   const isEmber = bot?.id === 'ember';
 
   return (

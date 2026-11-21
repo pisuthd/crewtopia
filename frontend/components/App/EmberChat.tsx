@@ -10,7 +10,7 @@ import ModelPicker from './ModelPicker';
 import FundCard from './FundCard';
 import { getPendingRent, type PendingRent } from '@/lib/ember';
 import type { ContextStats } from '@/lib/ember';
-import type { MockBot } from './mockTeam';
+import type { SidebarBot } from './crew';
 
 /** Compact token readout (12.4k, 1.2M) like the reference composer. */
 function fmtCtxTokens(n: number): string {
@@ -25,7 +25,7 @@ function ctxTone(pct: number): string {
   return 'bg-wfice text-wfink';
 }
 
-export default function EmberChat({ bot, onModel }: { bot: MockBot; onModel?: (model: string | null) => void }) {
+export default function EmberChat({ bot, onModel }: { bot: SidebarBot; onModel?: (model: string | null) => void }) {
   const { token } = useSession();
   const { messages, streaming, status, error, context, send } = useEmberChat(token, bot.id, true);
   const [draft, setDraft] = useState('');

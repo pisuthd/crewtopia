@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Droplets, LogIn, LogOut, Pencil, Search, Sparkles, Users, Wallet } from 'lucide-react';
 import Hexbot from '../Hexbot';
 import { brandName } from '@/lib/site';
-import type { MockBot } from './mockTeam';
+import type { SidebarBot } from './crew';
 import { useSession } from './SessionContext';
 import { useWallet } from './WalletContext';
 import WalletModal from './WalletModal';
@@ -14,12 +14,11 @@ import TokensModal from './TokensModal';
 import ConnectorsModal from './ConnectorsModal';
 import { truncateAddress } from '@/lib/wallet';
 import { getLiveTeam, type LiveCrew } from '@/lib/ember';
-import { MEMBER_META } from './mockTeam';
+import { CREW_META } from './crew';
 import { AnimatePresence, motion } from 'framer-motion';
 
 interface SidebarProps {
-  assistant: MockBot[];
-  team: { name: string; members: MockBot[] };
+  assistant: SidebarBot[];
   selectedId: string | null;
   onSelect: (id: string) => void;
   query: string;
@@ -40,7 +39,7 @@ function Section({
   onSelect,
 }: {
   title: string | null;
-  bots: MockBot[];
+  bots: SidebarBot[];
   startIndex: number;
   selectedId: string | null;
   onSelect: (id: string) => void;
@@ -87,7 +86,6 @@ function Section({
 
 export default function Sidebar({
   assistant,
-  team,
   selectedId,
   onSelect,
   query,
@@ -213,8 +211,8 @@ export default function Sidebar({
                 {crew.team} · {crew.minutesLeft} min left
               </p>
               <div className="space-y-1">
-                {Object.keys(MEMBER_META).map((role, i) => {
-                  const meta = MEMBER_META[role];
+                {Object.keys(CREW_META).map((role, i) => {
+                  const meta = CREW_META[role];
                   const id = `m:${crew.taskId}:${role}`;
                   const selected = id === selectedId;
                   return (

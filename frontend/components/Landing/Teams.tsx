@@ -28,7 +28,7 @@ const cards: TeamCard[] = [
     name: 'Dev Crew',
     tagline: 'A full dev team for your next build.',
     rate: '0.01 U/hr',
-    roles: 'Project Manager, UX/UI, Frontend, Backend',
+    roles: 'Tech Lead, UX/UI, Frontend, Backend',
     slug: 'dev-crew',
     agentId: 2885,
     explorerUrl: 'https://8004scan.io/agents?search=wayfind-dev-team',
