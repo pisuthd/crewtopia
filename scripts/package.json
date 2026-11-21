@@ -1,0 +1,38 @@
+{
+  "name": "crewtopia-scripts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Crewtopia on-chain test scripts — run in number order (see README in docs/bnbagent-sdk.md).",
+  "type": "module",
+  "scripts": {
+    "test:0": "tsx probes/0-faucet-claim.ts",
+    "test:1": "tsx probes/1-smoke-readonly.ts",
+    "test:2": "tsx probes/2-register-team.ts",
+    "test:3": "tsx probes/3-get-agent.ts",
+    "test:4": "tsx probes/4-list-agents.ts",
+    "test:5": "tsx probes/5-a2a-server.ts",
+    "test:6": "tsx probes/6-a2a-buyer.ts",
+    "test:7": "tsx probes/7-happy-path.ts",
+    "test:8": "tsx probes/8-x402-buyer.ts",
+    "test:9": "tsx probes/9-settle.ts",
+    "test:10": "tsx probes/10-feedback.ts",
+    "ops:register": "tsx ops/register-team.ts",
+    "e2e:cold-buyer": "tsx e2e/cold-buyer.ts",
+    "ops:settle": "tsx ops/settle-task.ts",
+    "ops:spike": "tsx ops/provision-spike.ts",
+    "ops:vm-task": "tsx ops/vm-task-spike.ts",
+    "ops:vms": "node ops/vm-list.mjs"
+  },
+  "dependencies": {
+    "@aws-sdk/client-lambda": "^3.1172.0",
+    "@aws-sdk/client-lambda-microvms": "^3.1172.0",
+    "@bnbagent/sdk": "^0.6.1",
+    "viem": "^2.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "esbuild": "0.21.5",
+    "tsx": "4.19.4",
+    "typescript": "~5.5.4"
+  }
+}

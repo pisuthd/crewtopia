@@ -92,9 +92,11 @@ export const handler: APIGatewayProxyHandler = async (event) => {
     }
   }
 
+  // Single Meta key for VM inference (meta-only images). Legacy MODAL passes
+  // through only when configured (old images).
+  const providerKey = process.env.PROVIDER_API_KEY ?? '';
   const modalKey = process.env.MODAL_API_KEY ?? '';
-  const providerKey = process.env.PROVIDER_API_KEY ?? modalKey;
-  if (!modalKey) return bad(500, 'server misconfigured: inference keys missing');
+  if (!providerKey) return bad(500, 'server misconfigured: inference keys missing');
 
   // One sandbox per wallet: reuse the buyer's live VM, or resume a suspended
   // one (files survive suspend) — boot new only when neither exists.
@@ -154,9 +156,9 @@ export const handler: APIGatewayProxyHandler = async (event) => {
 
     const hook = await vmFetch(endpoint, token, '/hooks/run', {
       method: 'POST',
-      body: JSON.stringify({ ownerId, computerId: taskId, secrets: { MODAL_API_KEY: modalKey, PROVIDER_API_KEY: providerKey }, usageToken: `crewtopia-${taskId.slice(0, 8)}`, apiUrl: 'https://example.com' }),
+      body: JSON.stringify({ ownerId, computerId: taskId, secrets: { ...(modalKey ? { MODAL_API_KEY: modalKey } : {}), PROVIDER_API_KEY: providerKey }, usageToken: `crewtopia-${taskId.slice(0, 8)}`, apiUrl: 'https://example.com' }),
     });
-    console.log(`[sandbox] hook keys: MODAL=${modalKey.length} chars PROVIDER=${providerKey.length} chars -> ${hook.status} ${hook.text.slice(0, 200)}`);
+    console.log(`[sandbox] hook keys: PROVIDER=${providerKey.length} chars${modalKey ? ` MODAL=${modalKey.length} chars` : ''} -> ${hook.status} ${hook.text.slice(0, 200)}`);
     if (hook.status !== 200 || hook.json?.initialized !== true) {
       throw new Error(`hooks/run failed: ${hook.status} ${hook.text.slice(0, 200)}`);
     }

@@ -12,5 +12,7 @@ cdk.out/
 *.zip
 .computer-image-state.json
 .microvm-state.json
+computer/dist/
+computer/stage/
 
 bnbagent-sdk/

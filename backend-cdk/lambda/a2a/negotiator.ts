@@ -7,9 +7,9 @@ import type { TaskMessage } from './types';
  * to the template PM, so negotiation never hard-depends on inference.
  */
 export async function modelReply(history: TaskMessage[], quote: Quote): Promise<string | null> {
-  const base = (process.env.NEGOTIATOR_BASE_URL ?? '').replace(/\/+$/, '');
-  const key = process.env.NEGOTIATOR_API_KEY ?? '';
-  const model = process.env.NEGOTIATOR_MODEL ?? '';
+  const base = (process.env.PROVIDER_BASE_URL ?? '').replace(/\/+$/, '');
+  const key = process.env.PROVIDER_API_KEY ?? '';
+  const model = process.env.PROVIDER_MODEL ?? '';
   if (!base || !key || !model) return null;
   try {
     const items = quote.roles.map((r) => `- ${r}`).join('\n');

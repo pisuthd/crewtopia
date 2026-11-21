@@ -78,17 +78,17 @@ export class CrewtopiaBackendStack extends cdk.Stack {
     authFn.addEnvironment('NONCES_TABLE', noncesTable.tableName);
     authFn.addEnvironment('PROFILES_TABLE', profilesTable.tableName);
     authFn.addEnvironment('SESSION_SECRET', sessionSecret);
-    // Negotiator brain (optional): OpenAI-compatible endpoint + key. When
-    // unset, negotiate falls back to the template PM (current behavior) —
+    // Negotiator brain (optional): meta endpoint + key via PROVIDER_*.
+    // When unset, negotiate falls back to the template PM (current behavior) —
     // tests stay green either way. Same testnet-only treatment as escrow keys.
-    if (process.env.NEGOTIATOR_BASE_URL) {
-      a2aFn.addEnvironment('NEGOTIATOR_BASE_URL', process.env.NEGOTIATOR_BASE_URL);
+    if (process.env.PROVIDER_BASE_URL) {
+      a2aFn.addEnvironment('PROVIDER_BASE_URL', process.env.PROVIDER_BASE_URL);
     }
-    if (process.env.NEGOTIATOR_API_KEY) {
-      a2aFn.addEnvironment('NEGOTIATOR_API_KEY', process.env.NEGOTIATOR_API_KEY);
+    if (process.env.PROVIDER_API_KEY) {
+      a2aFn.addEnvironment('PROVIDER_API_KEY', process.env.PROVIDER_API_KEY);
     }
-    if (process.env.NEGOTIATOR_MODEL) {
-      a2aFn.addEnvironment('NEGOTIATOR_MODEL', process.env.NEGOTIATOR_MODEL);
+    if (process.env.PROVIDER_MODEL) {
+      a2aFn.addEnvironment('PROVIDER_MODEL', process.env.PROVIDER_MODEL);
     }
     // Testnet-only custodial provider wallet: holds the team's escrow
     // provider role (create/register/setBudget). NEVER mainnet keys here —
@@ -256,10 +256,14 @@ export class CrewtopiaBackendStack extends cdk.Stack {
       'COMPUTER_IMAGE_ARN',
       'arn:aws:lambda:ap-southeast-1:057386374967:microvm-image:wayfind-computer',
     );
-    const modalKey = process.env.MODAL_API_KEY ?? process.env.NEGOTIATOR_API_KEY ?? '';
-    if (modalKey) {
-      sandboxFn.addEnvironment('MODAL_API_KEY', modalKey);
-      sandboxFn.addEnvironment('PROVIDER_API_KEY', process.env.PROVIDER_API_KEY ?? modalKey);
+    // VM inference key: single Meta key (PROVIDER_API_KEY). Legacy MODAL_API_KEY
+    // passes through only when set (old images); new images are meta-only.
+    const vmProviderKey = process.env.PROVIDER_API_KEY ?? '';
+    if (process.env.MODAL_API_KEY) {
+      sandboxFn.addEnvironment('MODAL_API_KEY', process.env.MODAL_API_KEY);
+    }
+    if (vmProviderKey) {
+      sandboxFn.addEnvironment('PROVIDER_API_KEY', vmProviderKey);
     }
     sandboxFn.addToRolePolicy(
       new cdk.aws_iam.PolicyStatement({
