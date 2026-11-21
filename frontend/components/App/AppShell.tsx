@@ -9,13 +9,14 @@ import { ALL_BOTS, ASSISTANT, CURRENT_TEAM } from './mockTeam';
 interface AppShellProps {
   initialId?: string;
   promptAssistant?: boolean;
+  promptTokens?: boolean;
 }
 
 function matches(query: string, name: string, role: string): boolean {
   return !query || `${name}${role}`.toLowerCase().includes(query.toLowerCase());
 }
 
-export default function AppShell({ initialId, promptAssistant }: AppShellProps) {
+export default function AppShell({ initialId, promptAssistant, promptTokens }: AppShellProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
@@ -43,6 +44,7 @@ export default function AppShell({ initialId, promptAssistant }: AppShellProps) 
         team={team}
         selectedId={selectedId}
         promptAssistant={promptAssistant}
+        promptTokens={promptTokens}
         onSelect={(id) => {
           setSelectedId(id);
           setSideOpen(false);
@@ -54,7 +56,11 @@ export default function AppShell({ initialId, promptAssistant }: AppShellProps) 
         open={sideOpen}
         onClose={() => setSideOpen(false)}
       />
-      <TeamView bot={bot} onOpenSidebar={() => setSideOpen(true)} />
+      <TeamView
+        bot={bot}
+        onOpenSidebar={() => setSideOpen(true)}
+        onDeletedAssistant={() => setSelectedId(null)}
+      />
     </div>
   );
 }

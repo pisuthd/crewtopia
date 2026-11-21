@@ -6,6 +6,7 @@ import Hexbot from '../Hexbot';
 import { useSession } from './SessionContext';
 import { useEmberChat } from './useEmberChat';
 import Markdown from './Markdown';
+import ModelPicker from './ModelPicker';
 import type { ContextStats } from '@/lib/ember';
 import type { MockBot } from './mockTeam';
 
@@ -22,11 +23,15 @@ function ctxTone(pct: number): string {
   return 'bg-wfice text-wfink';
 }
 
-export default function EmberChat({ bot }: { bot: MockBot }) {
+export default function EmberChat({ bot, onModel }: { bot: MockBot; onModel?: (model: string | null) => void }) {
   const { token } = useSession();
   const { messages, streaming, status, error, context, send } = useEmberChat(token, bot.id, true);
   const [draft, setDraft] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    onModel?.(context?.model ?? null);
+  }, [context?.model, onModel]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -114,9 +119,7 @@ export default function EmberChat({ bot }: { bot: MockBot }) {
               </button>
             </div>
             <div className="mt-1.5 flex items-center justify-between px-1">
-              <span className="flex h-7 shrink-0 items-center rounded-full bg-slate-100 px-2.5 text-[11px] font-bold text-wfink">
-                Muse Ember
-              </span>
+              <ModelPicker model={context?.model ?? null} disabled={busy} />
               {context ? (
                 <span
                   title={`${fmtCtxTokens(context.tokens)} of ${fmtCtxTokens(context.limit)} tokens on ${context.model || 'Muse Ember'}`}

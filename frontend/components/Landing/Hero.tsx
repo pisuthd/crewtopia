@@ -30,7 +30,7 @@ export default function Hero() {  return (
             <ArrowRight size={16} />
           </Link>
           <Link
-            href="/app/request-testnet-tokens"
+            href="/app?start=request-tokens"
             className="inline-flex items-center justify-center gap-2 rounded-2xl border border-navy/20 px-8 py-4 text-sm font-bold text-navy transition hover:border-navy/50 hover:bg-mist"
           >
             Get test $U

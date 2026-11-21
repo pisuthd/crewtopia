@@ -48,10 +48,16 @@ export async function getAssistants(): Promise<Assistant[]> {
   return body.assistants;
 }
 
-export async function assignAssistant(token: string, assistantId: string): Promise<void> {
+export async function assignAssistant(token: string, assistantId: string | null): Promise<void> {
   await api('/assistants/assign', token, {
     method: 'POST',
     body: JSON.stringify({ assistantId }),
+  });
+}
+
+export async function deleteChatHistory(token: string, assistantId: string): Promise<void> {
+  await api(`/chat/history?assistantId=${encodeURIComponent(assistantId)}`, token, {
+    method: 'DELETE',
   });
 }
 

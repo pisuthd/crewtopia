@@ -13,7 +13,8 @@ function AppPageInner() {
   // the assignment — otherwise the picker modal is prompted instead.
   const initialId = start === 'ember' ? 'ember' : undefined;
   const promptAssistant = start === 'ember';
-  return <AppShell initialId={initialId} promptAssistant={promptAssistant} />;
+  const promptTokens = start === 'request-tokens';
+  return <AppShell initialId={initialId} promptAssistant={promptAssistant} promptTokens={promptTokens} />;
 }
 
 export default function AppPage() {

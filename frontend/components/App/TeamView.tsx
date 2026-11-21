@@ -1,17 +1,25 @@
 'use client';
 
-import { Menu, Send } from 'lucide-react';
+import { useState } from 'react';
+import { Menu, PanelRight, Send } from 'lucide-react';
 import Hexbot from '../Hexbot';
 import EmberChat from './EmberChat';
+import EmberPanel from './EmberPanel';
 import type { MockBot } from './mockTeam';
 
 interface TeamViewProps {
   bot: MockBot | null;
   onOpenSidebar: () => void;
+  onDeletedAssistant: () => void;
 }
 
-export default function TeamView({ bot, onOpenSidebar }: TeamViewProps) {
+export default function TeamView({ bot, onOpenSidebar, onDeletedAssistant }: TeamViewProps) {
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [model, setModel] = useState<string | null>(null);
+  const isEmber = bot?.id === 'ember';
+
   return (
+    <>
     <main className="flex min-w-0 flex-1 flex-col bg-wfthread">
       <header className="relative flex items-center px-4 py-3.5">
         <button
@@ -23,6 +31,20 @@ export default function TeamView({ bot, onOpenSidebar }: TeamViewProps) {
         </button>
         <span className="hidden w-40 md:block" />
         {bot ? (
+          isEmber ? (
+            <button
+              onClick={() => setPanelOpen((o) => !o)}
+              aria-expanded={panelOpen}
+              aria-label="Assistant info"
+              className="mx-auto flex items-center gap-2.5 rounded-full bg-white py-2 pl-3 pr-5 font-bold text-wfnavy shadow-md shadow-wfnavy/5 hover:bg-slate-50"
+            >
+              <Hexbot color={bot.color} size="xs" role={bot.hexRole} label={`${bot.name} hexbot`} />
+              <span>{bot.name}</span>
+              <span className="hidden text-sm font-medium text-wfink sm:inline">
+                · {bot.role}
+              </span>
+            </button>
+          ) : (
           <div className="mx-auto flex items-center gap-2.5 rounded-full bg-white py-2 pl-3 pr-5 font-bold text-wfnavy shadow-md shadow-wfnavy/5">
             <Hexbot color={bot.color} size="xs" role={bot.hexRole} label={`${bot.name} hexbot`} />
             <span>{bot.name}</span>
@@ -30,16 +52,30 @@ export default function TeamView({ bot, onOpenSidebar }: TeamViewProps) {
               · {bot.role}
             </span>
           </div>
+          )
         ) : (
           <div className="mx-auto" />
         )}
-        <span className="w-9 md:hidden" />
-        <span className="hidden w-40 md:block" />
+        {isEmber ? (
+          <button
+            onClick={() => setPanelOpen((o) => !o)}
+            aria-label="Assistant info"
+            aria-expanded={panelOpen}
+            className="grid h-9 w-9 place-items-center rounded-full bg-white text-wfnavy shadow-sm hover:bg-slate-50"
+          >
+            <PanelRight className="h-4 w-4" strokeWidth={2.2} />
+          </button>
+        ) : (
+          <>
+            <span className="w-9 md:hidden" />
+            <span className="hidden w-40 md:block" />
+          </>
+        )}
       </header>
 
       {bot ? (
         bot.id === 'ember' ? (
-          <EmberChat bot={bot} />
+          <EmberChat bot={bot} onModel={setModel} />
         ) : (
           <>
             <div className="grid flex-1 place-items-center px-6">
@@ -77,5 +113,15 @@ export default function TeamView({ bot, onOpenSidebar }: TeamViewProps) {
         </div>
       )}
     </main>
+    {isEmber && bot && (
+      <EmberPanel
+        open={panelOpen}
+        onClose={() => setPanelOpen(false)}
+        bot={bot}
+        model={model}
+        onDeleted={onDeletedAssistant}
+      />
+    )}
+    </>
   );
 }

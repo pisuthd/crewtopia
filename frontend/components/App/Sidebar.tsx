@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Check, Copy, Fingerprint, LogOut, Pencil, Search, Sparkles, Users, Wallet } from 'lucide-react';
+import { Check, Copy, Droplets, Fingerprint, LogOut, Pencil, Search, Sparkles, Users, Wallet } from 'lucide-react';
 import Hexbot from '../Hexbot';
 import { brandName } from '@/lib/site';
 import type { MockBot } from './mockTeam';
@@ -10,6 +10,7 @@ import { useSession } from './SessionContext';
 import { useWallet } from './WalletContext';
 import WalletModal from './WalletModal';
 import AssistantModal from './AssistantModal';
+import TokensModal from './TokensModal';
 import ConnectorsModal from './ConnectorsModal';
 import { truncateAddress } from '@/lib/wallet';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -26,6 +27,7 @@ interface SidebarProps {
   open: boolean;
   onClose: () => void;
   promptAssistant?: boolean;
+  promptTokens?: boolean;
 }
 
 function Section({
@@ -93,10 +95,13 @@ export default function Sidebar({
   open,
   onClose,
   promptAssistant,
+  promptTokens,
 }: SidebarProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
+  const [tokensOpen, setTokensOpen] = useState(false);
   const dismissed = useRef(false);
+  const tokensDismissed = useRef(false);
   const { profile, ready } = useSession();
   const emberAssigned = profile?.assistantId === 'ember';
 
@@ -107,6 +112,12 @@ export default function Sidebar({
       setAssistantOpen(true);
     }
   }, [promptAssistant, ready, emberAssigned]);
+  // ?start=request-tokens → open the faucet modal once. No session needed.
+  useEffect(() => {
+    if (promptTokens && !tokensDismissed.current) {
+      setTokensOpen(true);
+    }
+  }, [promptTokens]);
   return (
     <>
       <div
@@ -182,7 +193,7 @@ export default function Sidebar({
 
         <div className="border-t border-wfnavy/10 p-4">
           <ProfileName />
-          <WalletFooter onOpen={() => setModalOpen(true)} />
+          <WalletFooter onOpen={() => setModalOpen(true)} onRequestTokens={() => setTokensOpen(true)} />
         </div>
       </aside>
       <WalletModal open={modalOpen} onClose={() => setModalOpen(false)} />
@@ -191,6 +202,13 @@ export default function Sidebar({
         onClose={() => {
           dismissed.current = true;
           setAssistantOpen(false);
+        }}
+      />
+      <TokensModal
+        open={tokensOpen}
+        onClose={() => {
+          tokensDismissed.current = true;
+          setTokensOpen(false);
         }}
       />
     </>
@@ -260,7 +278,7 @@ function ProfileName() {
   );
 }
 
-function WalletFooter({ onOpen }: { onOpen: () => void }) {
+function WalletFooter({ onOpen, onRequestTokens }: { onOpen: () => void; onRequestTokens: () => void }) {
   const { address, isConnected, isCorrectChain, disconnect, switchNetwork, balance } = useWallet();
   const { signedIn, signingIn, signIn, signOut, profile } = useSession();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -349,6 +367,17 @@ function WalletFooter({ onOpen }: { onOpen: () => void }) {
               </span>
             </div>
             <div className="mx-4 my-1 border-t border-wfnavy/10" aria-hidden="true" />
+            <button
+              role="menuitem"
+              onClick={() => {
+                setMenuOpen(false);
+                onRequestTokens();
+              }}
+              className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm font-semibold text-wfnavy hover:bg-wfice"
+            >
+              <Droplets className="h-4 w-4" strokeWidth={2.2} />
+              Request test $U
+            </button>
             <button
               role="menuitem"
               onClick={() => void copyAddress()}
