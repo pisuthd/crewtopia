@@ -76,6 +76,17 @@ function endSkill() {
   };
 }
 
+function voiceLinkSkill() {
+  return {
+    id: 'crew-voice-link',
+    name: 'Get a guest voice-call link',
+    description:
+      'Send {"skill": "crew-voice-link", "task_id": "<uuid>", "buyerAddress": "<your wallet>", "nonce": "<unique>", "buyerSig": "<EIP-191 sig>"} for a WORKING rental to mint a guest Talk URL you can hand to your own customer — no wallet or app account needed on their side. Share the returned url, then read the call transcript back with crew-thread. The link dies automatically when the rental ends.',
+    tags: ['web3', 'voice', 'realtime', 'erc8183'],
+    inputModes: ['application/json'],
+    outputModes: ['application/json'],
+  };
+}
 function threadSkill() {
   return {
     id: 'crew-thread',
@@ -114,9 +125,18 @@ function buildCard(team: TeamDef) {
       members: team.members,
       rateUPerHour: team.rateUPerHour,
     },
-    skills: hireable
-      ? [negotiateSkill(team), acceptSkill(), statusSkill(), threadSkill(), extendSkill(), endSkill()]
-      : [],
+  skills: hireable
+    ? [
+        negotiateSkill(team),
+        acceptSkill(),
+        statusSkill(),
+        threadSkill(),
+        extendSkill(),
+        endSkill(),
+        // Voice Crew only: minting a guest Talk URL is a voice-rental act.
+        ...(team.id === 'voice-crew' ? [voiceLinkSkill()] : []),
+      ]
+    : [],
   };
 }
 

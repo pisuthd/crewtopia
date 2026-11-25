@@ -7,6 +7,7 @@ import { handleAccept, handleAcceptFinish } from './accept';
 import { handleStatus } from './status';
 import { handleDeliver } from './deliver';
 import { handleThread } from './thread';
+import { handleVoiceLink } from './voiceLink';
 import { handleExtend } from './extend';
 import { handleEnd } from './end';
 
@@ -54,6 +55,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
   if (data.skill === 'web3-task-status') return handleStatus(id, data);
   if (data.skill === 'web3-deliver') return handleDeliver(id, data);
   if (data.skill === 'crew-thread') return handleThread(id, data);
+  if (data.skill === 'crew-voice-link') return handleVoiceLink(id, data);
   if (data.skill === 'crew-extend') return handleExtend(id, data);
   if (data.skill === 'crew-end') return handleEnd(id, data);
 

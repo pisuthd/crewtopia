@@ -184,6 +184,10 @@ export class CrewtopiaBackendStack extends cdk.Stack {
     a2aFn.addEnvironment('TEAM_REGISTRY_TABLE', teamRegistryTable.tableName);
     sandboxTable.grantReadData(a2aFn);
     a2aFn.addEnvironment('SANDBOX_TABLE', sandboxTable.tableName);
+    // Guest Talk URL base for the crew-voice-link skill. Empty = skill
+    // returns the /voice/g/<id> path and the buyer prefixes the app origin.
+    a2aFn.addEnvironment('FRONTEND_URL', process.env.FRONTEND_URL ?? '');
+    appFn.addEnvironment('FRONTEND_URL', process.env.FRONTEND_URL ?? '');
     // Member relay mints VM auth tokens; panel terminate destroys the VM.
     appFn.addToRolePolicy(
       new cdk.aws_iam.PolicyStatement({
