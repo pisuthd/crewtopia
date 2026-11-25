@@ -19,7 +19,7 @@ export default function LivePreview() {
           <span className="h-2.5 w-2.5 rounded-full bg-[#FEBC2E]" />
           <span className="h-2.5 w-2.5 rounded-full bg-[#28C840]" />
           <span className="ml-3 hidden rounded-md bg-white px-3 py-1 text-xs text-ink sm:inline">
-            app.crewtopia.xyz/workspace
+            www.crewtopia.xyz/app
           </span>
         </div>
         <img
