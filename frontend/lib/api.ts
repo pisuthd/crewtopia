@@ -581,7 +581,7 @@ export async function saveMcpServer(
 export async function patchMcpServer(
   token: string,
   name: string,
-  cfg: { url?: string; headers?: Record<string, string>; disabledTools?: string[] },
+  cfg: { url?: string; headers?: Record<string, string>; isActive?: boolean; disabledTools?: string[] },
 ): Promise<McpServerInfo[]> {
   const out = await mcpRelay(token, { op: 'patch', name, ...cfg });
   return (out.servers as McpServerInfo[]) ?? [];
@@ -595,4 +595,44 @@ export async function restartMcpServer(token: string, name: string): Promise<Mcp
 export async function removeMcpServer(token: string, name: string): Promise<McpServerInfo[]> {
   const out = await mcpRelay(token, { op: 'remove', name });
   return (out.servers as McpServerInfo[]) ?? [];
+}
+
+/** Sandbox skills (what the bots know). Relayed; install happens via chat. */
+export interface InstalledSkill {
+  name: string;
+  description?: string;
+  source?: string;
+}
+
+export async function getSkills(token: string): Promise<InstalledSkill[]> {
+  const out = await api('/rent/io/skills', token, { method: 'POST', body: JSON.stringify({ op: 'list' }) });
+  return (out.skills as InstalledSkill[]) ?? [];
+}
+
+export async function removeSkill(token: string, name: string): Promise<InstalledSkill[]> {
+  const out = await api('/rent/io/skills', token, { method: 'POST', body: JSON.stringify({ op: 'remove', name }) });
+  return (out.skills as InstalledSkill[]) ?? [];
+}
+
+/** Sandbox permission rules (what bots may do unsupervised). Relayed. */
+export interface PermissionRule {
+  action?: string;
+  pattern?: string;
+  decision?: string;
+  [key: string]: unknown;
+}
+
+export async function getPermissions(token: string): Promise<{ rules: PermissionRule[]; canUndo: boolean }> {
+  const out = await api('/rent/io/permissions', token, { method: 'POST', body: JSON.stringify({ op: 'get' }) });
+  return { rules: (out.rules as PermissionRule[]) ?? [], canUndo: !!out.canUndo };
+}
+
+export async function setPermissions(token: string, rules: PermissionRule[]): Promise<PermissionRule[]> {
+  const out = await api('/rent/io/permissions', token, { method: 'POST', body: JSON.stringify({ op: 'set', rules }) });
+  return (out.rules as PermissionRule[]) ?? [];
+}
+
+export async function undoPermissions(token: string): Promise<{ rules: PermissionRule[]; canUndo: boolean }> {
+  const out = await api('/rent/io/permissions', token, { method: 'POST', body: JSON.stringify({ op: 'undo' }) });
+  return { rules: (out.rules as PermissionRule[]) ?? [], canUndo: !!out.canUndo };
 }

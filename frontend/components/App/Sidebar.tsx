@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Droplets, LogIn, LogOut, Pencil, Plus, Search, Users, Wallet } from 'lucide-react';
+import { Cog, Droplets, LogIn, LogOut, Pencil, Plus, Search, Users, Wallet } from 'lucide-react';
 import Hexbot from '../Hexbot';
 import { brandName } from '@/lib/site';
 import type { SidebarBot } from './crew';
@@ -16,6 +16,7 @@ import ConfirmModal from './ConfirmModal';
 import SandboxPanel from './SandboxPanel';
 import TokensModal from './TokensModal';
 import ConnectorsModal from './ConnectorsModal';
+import SettingsModal from './Settings';
 import { truncateAddress } from '@/lib/wallet';
 import { AnimatePresence, motion } from 'framer-motion';
 
@@ -431,6 +432,7 @@ function WalletFooter({ onOpen, onRequestTokens }: { onOpen: () => void; onReque
   const { signedIn, signingIn, signIn, signOut, profile } = useSession();
   const [menuOpen, setMenuOpen] = useState(false);
   const [connectorsOpen, setConnectorsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -531,6 +533,18 @@ function WalletFooter({ onOpen, onRequestTokens }: { onOpen: () => void; onReque
               role="menuitem"
               onClick={() => {
                 setMenuOpen(false);
+                setSettingsOpen(true);
+              }}
+              className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm font-semibold text-wfnavy hover:bg-wfice"
+            >
+              <Cog className="h-4 w-4" strokeWidth={2.2} />
+              Settings
+            </button>
+            <div className="mx-4 my-1 border-t border-wfnavy/10" aria-hidden="true" />
+            <button
+              role="menuitem"
+              onClick={() => {
+                setMenuOpen(false);
                 signOut();
                 disconnect();
               }}
@@ -569,6 +583,11 @@ function WalletFooter({ onOpen, onRequestTokens }: { onOpen: () => void; onReque
         </button>
       </div>
       <ConnectorsModal open={connectorsOpen} onClose={() => setConnectorsOpen(false)} />
+      <SettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        onAddConnector={() => setConnectorsOpen(true)}
+      />
     </div>
   );
 }
