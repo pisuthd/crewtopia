@@ -9,11 +9,15 @@ import {
   bootSandbox,
   getMcpServers,
   getSandboxStatus,
+  getSkills,
+  installSkill,
   patchMcpServer,
   removeMcpServer,
+  resolveSkill,
   restartMcpServer,
   saveMcpServer,
   type McpServerInfo,
+  type SkillResolveResult,
 } from '@/lib/api';
 
 const LB_URL = 'https://livingbrain.fernmcp.dev/livingbrain';
@@ -21,6 +25,7 @@ const LB_NAME = 'living-brain';
 /** Never offer destructive tools to the bots. */
 const LB_DISABLED = ['brains_remove', 'workspace_delete_permanently'];
 const SUBJECT_KEY = 'lb-subject';
+const COURNOT_SOURCE = 'Cournot-AI/cournot-skills/skills/cournot';
 
 function loadSubject(): string {
   try {
@@ -37,11 +42,14 @@ function loadSubject(): string {
 export default function ConnectorsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { token } = useSession();
   const [servers, setServers] = useState<Record<string, McpServerInfo>>({});
+  const [skillCount, setSkillCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [sandboxLive, setSandboxLive] = useState<boolean | null>(null);
-  const [detail, setDetail] = useState(false);
+  const [detail, setDetail] = useState<'brain' | 'skill' | null>(null);
   const [apiKey, setApiKey] = useState('');
   const [subject, setSubject] = useState('');
+  const [source, setSource] = useState('');
+  const [resolved, setResolved] = useState<SkillResolveResult | null>(null);
   const [working, setWorking] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
 
@@ -58,11 +66,15 @@ export default function ConnectorsModal({ open, onClose }: { open: boolean; onCl
         if (!alive) return;
         setSandboxLive(!!st?.vmLive);
         if (!st?.vmLive) return;
-        const list = await getMcpServers(token).catch(() => []);
+        const [list, skills] = await Promise.all([
+          getMcpServers(token).catch(() => []),
+          getSkills(token).catch(() => []),
+        ]);
         if (!alive) return;
         const map: Record<string, McpServerInfo> = {};
         for (const s of list) map[s.name] = s;
         setServers(map);
+        setSkillCount(skills.length);
       } finally {
         if (alive) setLoading(false);
       }
@@ -74,8 +86,10 @@ export default function ConnectorsModal({ open, onClose }: { open: boolean; onCl
 
   useEffect(() => {
     if (!open) {
-      setDetail(false);
+      setDetail(null);
       setApiKey('');
+      setSource('');
+      setResolved(null);
       setResult(null);
     }
   }, [open ]);
@@ -179,6 +193,58 @@ export default function ConnectorsModal({ open, onClose }: { open: boolean; onCl
     }
   }
 
+  async function doResolve() {
+    if (!token || working) return;
+    const src = source.trim();
+    if (!src) {
+      setResult({ ok: false, message: 'Paste a skill source first.' });
+      return;
+    }
+    setWorking(true);
+    setResult(null);
+    setResolved(null);
+    try {
+      const r = await resolveSkill(token, src);
+      if (r.error) {
+        setResult({ ok: false, message: r.error });
+        return;
+      }
+      setResolved(r);
+    } catch (e) {
+      setResult({ ok: false, message: e instanceof Error ? e.message : 'Resolve failed.' });
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  async function doInstall(overwrite = false) {
+    if (!token || working) return;
+    const src = source.trim();
+    if (!src) return;
+    setWorking(true);
+    setResult(null);
+    try {
+      const r = await installSkill(token, src, overwrite);
+      if (r.error) {
+        setResult({ ok: false, message: r.error });
+        return;
+      }
+      if (r.choices) {
+        setResolved({ choices: r.choices as SkillResolveResult['choices'], hint: r.hint });
+        setResult({ ok: false, message: 'That source holds several skills — pick one, then install.' });
+        return;
+      }
+      const skills = await getSkills(token).catch(() => []);
+      setSkillCount(skills.length);
+      setResolved(null);
+      setResult({ ok: true, message: 'Installed — your bots can load it from chat now.' });
+    } catch (e) {
+      setResult({ ok: false, message: e instanceof Error ? e.message : 'Install failed.' });
+    } finally {
+      setWorking(false);
+    }
+  }
+
   return (
     <ModalShell>
       <AnimatePresence>
@@ -209,14 +275,14 @@ export default function ConnectorsModal({ open, onClose }: { open: boolean; onCl
               <h2 className="flex items-center gap-2 font-brico text-lg font-bold text-wfnavy">
                 {detail && (
                   <button
-                    onClick={() => { setDetail(false); setResult(null); }}
+                    onClick={() => { setDetail(null); setResult(null); setResolved(null); }}
                     aria-label="Back to list"
                     className="rounded-lg p-1 hover:bg-wfice"
                   >
                     <ArrowLeft className="h-4 w-4" strokeWidth={2.2} />
                   </button>
                 )}
-                {detail ? 'Living Brain' : 'Connectors'}
+                {detail === 'skill' ? 'Install a skill' : detail === 'brain' ? 'Living Brain' : 'Connectors'}
               </h2>
               <button
                 onClick={onClose}
@@ -232,9 +298,9 @@ export default function ConnectorsModal({ open, onClose }: { open: boolean; onCl
                 Sign in to connect tools to your sandbox.
               </p>
             ) : !detail ? (
-              <div className="mt-4">
+              <div className="mt-4 space-y-2">
                 <button
-                  onClick={() => setDetail(true)}
+                  onClick={() => setDetail('brain')}
                   className="flex w-full items-center gap-3 rounded-xl border border-wfnavy/10 px-4 py-3 text-left hover:bg-wfice/50"
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -254,8 +320,27 @@ export default function ConnectorsModal({ open, onClose }: { open: boolean; onCl
                 <p className="mt-3 text-xs leading-relaxed text-wfink">
                   More connectors land here — each one becomes tools your whole crew can use.
                 </p>
+                <button
+                  onClick={() => setDetail('skill')}
+                  className="flex w-full items-center gap-3 rounded-xl border border-wfnavy/10 px-4 py-3 text-left hover:bg-wfice/50"
+                >
+                  <span className="grid h-10 w-10 place-items-center rounded-xl bg-wfice text-cta">
+                    <Plug className="h-5 w-5" strokeWidth={1.8} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-bold text-wfnavy">Install a skill</span>
+                    <span className="block truncate text-xs text-wfink">Teach your bots a new workflow from a repo link</span>
+                  </span>
+                  {skillCount !== null && skillCount > 0 ? (
+                    <span className="shrink-0 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">
+                      {skillCount} installed
+                    </span>
+                  ) : (
+                    <span className="shrink-0 rounded-full bg-wfice px-2.5 py-1 text-xs font-bold text-wfnavy">Import</span>
+                  )}
+                </button>
               </div>
-            ) : (
+            ) : detail === 'brain' ? (
               <div className="mt-4">
                 <p className="text-sm leading-relaxed text-wfnavy">
                   Give your crew long-term memory. Dot records call notes and decisions;
@@ -320,6 +405,97 @@ export default function ConnectorsModal({ open, onClose }: { open: boolean; onCl
                     {installed ? 'Update' : 'Import'}
                   </button>
                 </div>
+                {result && (
+                  <p className={`mt-3 rounded-xl px-4 py-2.5 text-sm font-semibold ${result.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+                    {result.message}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="mt-4">
+                <p className="text-sm leading-relaxed text-wfnavy">
+                  Teach your bots a new workflow. Paste a source, preview what it
+                  contains, then install — it lands in Settings → Skills.
+                </p>
+                <button
+                  onClick={() => { setSource(COURNOT_SOURCE); setResolved(null); setResult(null); }}
+                  className="mt-3 flex w-full items-center gap-3 rounded-xl border border-dashed border-wfnavy/20 px-4 py-3 text-left hover:bg-wfice/50"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-bold text-wfnavy">Try Cournot Intelligence</span>
+                    <span className="block text-xs text-wfink">Probability answers for crypto events — fills the source for you</span>
+                  </span>
+                  <span className="shrink-0 rounded-full bg-wfice px-2.5 py-1 text-xs font-bold text-wfnavy">Fill</span>
+                </button>
+                <p className="mt-2 text-xs text-wfink">
+                  Skill installs free. Cournot answers cost calls (3 free/account, then paid) — needs your Cournot account.
+                </p>
+                {sandboxLive === false && (
+                  <div className="mt-3 rounded-xl bg-amber-50 px-4 py-3 text-sm">
+                    <p className="font-semibold text-wfnavy">Sandbox isn&apos;t running.</p>
+                    <button
+                      onClick={doBoot}
+                      disabled={working}
+                      className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-cta px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+                    >
+                      {working && <Loader2 className="h-4 w-4 animate-spin" />}
+                      Boot sandbox
+                    </button>
+                  </div>
+                )}
+                <label className="mt-4 block text-xs font-bold text-wfnavy">Skill source</label>
+                <input
+                  value={source}
+                  onChange={(e) => { setSource(e.target.value); setResolved(null); }}
+                  placeholder="owner/repo[/path], GitHub URL, or SKILL.md URL"
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="mt-1 w-full rounded-xl border border-wfnavy/15 bg-white px-4 py-2.5 font-mono text-xs text-wfnavy outline-none placeholder:text-wfink/60 focus:border-cta"
+                />
+                <div className="mt-3 flex justify-end">
+                  <button
+                    onClick={doResolve}
+                    disabled={working || sandboxLive !== true || !source.trim()}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-wfnavy px-5 py-2 text-sm font-bold text-white disabled:opacity-50"
+                  >
+                    {working && <Loader2 className="h-4 w-4 animate-spin" />}
+                    Preview
+                  </button>
+                </div>
+                {resolved?.preview && (
+                  <div className="mt-3 rounded-xl border border-wfnavy/10 bg-wfice/60 p-4">
+                    <p className="font-brico text-sm font-bold text-wfnavy">{resolved.preview.name}</p>
+                    {!!resolved.preview.description && (
+                      <p className="mt-1 text-sm text-wfink">{resolved.preview.description}</p>
+                    )}
+                    <p className="mt-1 font-mono text-[11px] text-wfink">
+                      {(resolved.preview.files ?? []).length} file(s) · {resolved.preview.source}
+                    </p>
+                    <div className="mt-3 flex justify-end">
+                      <button
+                        onClick={() => doInstall()}
+                        disabled={working}
+                        className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-cta px-5 py-2 text-sm font-bold text-white hover:bg-ctahover disabled:opacity-50"
+                      >
+                        {working && <Loader2 className="h-4 w-4 animate-spin" />}
+                        Install skill
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {resolved?.choices && (
+                  <div className="mt-3 rounded-xl border border-wfnavy/10 bg-wfice/60 p-4">
+                    <p className="text-sm font-bold text-wfnavy">That source holds several skills:</p>
+                    <p className="mt-1 text-xs text-wfink">{resolved.hint ?? 'Refine the source to one skill path, then preview again.'}</p>
+                    <ul className="mt-2 space-y-1">
+                      {(resolved.choices ?? []).slice(0, 8).map((c: any, i: number) => (
+                        <li key={`${c?.path ?? c?.name ?? i}`} className="truncate font-mono text-xs text-wfnavy">
+                          {String(c?.path ?? c?.name ?? '')}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 {result && (
                   <p className={`mt-3 rounded-xl px-4 py-2.5 text-sm font-semibold ${result.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
                     {result.message}

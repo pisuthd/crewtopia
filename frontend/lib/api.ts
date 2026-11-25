@@ -614,6 +614,39 @@ export async function removeSkill(token: string, name: string): Promise<Installe
   return (out.skills as InstalledSkill[]) ?? [];
 }
 
+export interface SkillPreview {
+  name: string;
+  description: string;
+  source: string;
+  files: Array<{ path: string } | string>;
+}
+
+export interface SkillResolveResult {
+  preview?: SkillPreview;
+  choices?: Array<{ name?: string; path?: string; description?: string }>;
+  hint?: string;
+  error?: string;
+}
+
+/** Preview a skill source before installing (read-only). */
+export async function resolveSkill(token: string, source: string): Promise<SkillResolveResult> {
+  const out = await api('/rent/io/skills', token, { method: 'POST', body: JSON.stringify({ op: 'resolve', source }) });
+  return out as SkillResolveResult;
+}
+
+/** Install a previewed skill source (confirm in UI first). */
+export async function installSkill(
+  token: string,
+  source: string,
+  overwrite = false,
+): Promise<{ skills?: InstalledSkill[]; choices?: unknown; hint?: string; error?: string }> {
+  const out = await api('/rent/io/skills', token, {
+    method: 'POST',
+    body: JSON.stringify({ op: 'install', source, overwrite }),
+  });
+  return out as { skills?: InstalledSkill[]; choices?: unknown; hint?: string; error?: string };
+}
+
 /** Sandbox permission rules (what bots may do unsupervised). Relayed. */
 export interface PermissionRule {
   action?: string;

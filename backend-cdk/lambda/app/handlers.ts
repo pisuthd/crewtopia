@@ -1232,6 +1232,69 @@ export async function handleCrewContextCompact(address: string, params: Record<s
 const MCP_NAME_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const LB_URL = 'https://livingbrain.fernmcp.dev/livingbrain';
 
+/** Shared VM JSON relay: session-authed owner → own sandbox only. */
+async function relayToVm(address: string, method: string, path: string, payload?: unknown) {
+  const owner = String(address).toLowerCase();
+  const sb = await resolveSandboxVm(owner).catch(() => null);
+  if (!sb) return { statusCode: 409, body: { error: 'boot your sandbox first' } };
+  let tokenStr: string;
+  try {
+    tokenStr = await vmToken(sb.vmId);
+  } catch {
+    return { statusCode: 502, body: { error: 'sandbox auth failed' } };
+  }
+  try {
+    const res = await fetch(`https://${(sb as any).endpoint}${path}`, {
+      method,
+      headers: { 'X-aws-proxy-auth': tokenStr, 'content-type': 'application/json' },
+      body: payload === undefined ? undefined : JSON.stringify(payload),
+      signal: AbortSignal.timeout(30_000),
+    });
+    const data = await res.json().catch(() => ({}));
+    return { statusCode: res.status, body: data };
+  } catch {
+    return { statusCode: 502, body: { error: 'sandbox unreachable' } };
+  }
+}
+
+const SKILL_NAME_RE = /^[A-Za-z0-9-]{1,64}$/;
+
+/** POST /rent/io/skills (session-authed): { op, name?, source?, overwrite? }.
+ * list|remove as before; resolve previews a source; install saves it after
+ * the buyer confirms the preview in the UI (same gating as chat import). */
+export async function handleSkillsRelay(address: string, body: any) {
+  const op = String(body?.op ?? '');
+  if (op === 'list') return relayToVm(address, 'GET', '/skills');
+  const name = String(body?.name ?? '');
+  if (op === 'remove') {
+    if (!SKILL_NAME_RE.test(name)) return { statusCode: 400, body: { error: 'bad skill name' } };
+    return relayToVm(address, 'DELETE', `/skills/${name}`);
+  }
+  if (op === 'resolve' || op === 'install') {
+    const source = String(body?.source ?? '').trim();
+    if (!source || source.length > 500) return { statusCode: 400, body: { error: 'need a skill source (owner/repo[/path], GitHub URL, or SKILL.md URL)' } };
+    const payload: Record<string, unknown> = { source };
+    if (op === 'install' && body?.overwrite === true) payload.overwrite = true;
+    return relayToVm(address, 'POST', op === 'resolve' ? '/skills/resolve' : '/skills/install', payload);
+  }
+  return { statusCode: 400, body: { error: 'op must be list|remove|resolve|install' } };
+}
+
+/** POST /rent/io/permissions (session-authed): { op: 'get' | 'set' | 'undo', rules? } */
+export async function handlePermissionsRelay(address: string, body: any) {
+  const op = String(body?.op ?? '');
+  if (op === 'get') return relayToVm(address, 'GET', '/permissions');
+  if (op === 'undo') return relayToVm(address, 'POST', '/permissions/undo', {});
+  if (op === 'set') {
+    const rules = body?.rules;
+    if (!Array.isArray(rules) || rules.length > 200) {
+      return { statusCode: 400, body: { error: 'rules must be an array (max 200)' } };
+    }
+    return relayToVm(address, 'PUT', '/permissions', { rules });
+  }
+  return { statusCode: 400, body: { error: 'op must be get|set|undo' } };
+}
+
 /** POST /rent/io/mcp (session-authed): relay MCP registry ops to the renter's
  * sandbox VM. Body: { op: 'list' | 'save' | 'patch' | 'remove' | 'restart',
  * name?, url?, headers?, disabledTools? }. Only https URLs; header values are
