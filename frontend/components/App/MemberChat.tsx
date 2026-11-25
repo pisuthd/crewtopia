@@ -482,7 +482,7 @@ export default function MemberChat({ taskId, role, name, title, color, hexRole, 
             <p className="font-brico text-xl font-bold text-wfnavy">Talk to {name}</p>
             <p className="mt-1 text-sm text-wfink">{title} — {description}</p>
             <p className="mt-3 rounded-xl bg-white/70 px-3 py-2 text-xs text-wfink shadow-sm">
-              Direct line — the crew coordinates internally through Taylor, so nothing shows here until you message {name} yourself.
+              Direct line — the crew coordinates internally through {roster[0]?.name ?? 'its lead'}, so nothing shows here until you message {name} yourself.
             </p>
           </div>
         )}

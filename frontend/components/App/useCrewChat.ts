@@ -70,6 +70,11 @@ export function useCrewChat(token: string | null, taskId: string, role: string, 
   const aliveRef = useRef(true);
   const busyRef = useRef(false);
   const greetKeyRef = useRef('');
+  /** True only after getMemberHistory SUCCEEDS for the current thread.
+   * The greeting gate must decide on real data, never on initial state
+   * (idle/empty/false) — which is what every mount looks like before the
+   * history lands. Reset per thread; a failed load never greets. */
+  const historyOkRef = useRef(false);
   const runIdRef = useRef<string | null>(null);
   const cursorRef = useRef(0);
 
@@ -79,6 +84,7 @@ export function useCrewChat(token: string | null, taskId: string, role: string, 
   useEffect(() => {
     if (!token || !active || !taskId) return;
     aliveRef.current = true;
+    historyOkRef.current = false;
     setStatus('loading');
     getMemberHistory(token, taskId, role)
       .then(({ messages: msgs, context: ctx, kickoffStarted: ks }) => {
@@ -96,6 +102,7 @@ export function useCrewChat(token: string | null, taskId: string, role: string, 
         setMessages(clean);
         setContext(ctx);
         setKickoffStarted(ks);
+        historyOkRef.current = true;
         setStatus('idle');
       })
       .catch((e: unknown) => {
@@ -283,7 +290,12 @@ export function useCrewChat(token: string | null, taskId: string, role: string, 
   // VM rebirth) — greeting then would duplicate it. A started kickoff shows
   // "crew starting…" instead; the greeting is a rare fallback for threads
   // where no run ever started. Exactly-once per thread, silent on expiry.
+  // Race guard: historyOkRef — the success handler above always re-renders
+  // (setMessages/setKickoffStarted/setStatus), so by the time this effect
+  // re-runs, the ref tells whether we decided on real data yet. Mount-time
+  // initial state (idle/empty/false) must never greet on its own.
   useEffect(() => {
+    if (!historyOkRef.current) return;
     if (!token || !active || !taskId || status !== 'idle' || messages.length > 0 || kickoffStarted) return;
     const key = `${taskId}#${role}`;
     if (greetKeyRef.current === key) return;
