@@ -1,0 +1,40 @@
+{
+  "name": "crewtopia",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Crewtopia — rent AI crews by the minute: Dev Crew + Studio Crew on BNB Chain.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@elevenlabs/react": "^1.24.0",
+    "@tailwindcss/typography": "^0.5.20",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "framer-motion": "^14.14.0",
+    "highlight.js": "^11.12.0",
+    "lucide-react": "^1.72.0",
+    "next": "15.5.29",
+    "qrcode.react": "^4.2.0",
+    "react": "^18",
+    "react-dom": "^18",
+    "react-markdown": "^10.1.0",
+    "rehype-highlight": "^7.0.2",
+    "remark-gfm": "^4.0.1",
+    "viem": "^2.58.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "autoprefixer": "^10.4.19",
+    "eslint": "^9",
+    "eslint-config-next": "15.5.29",
+    "postcss": "^8.4.40",
+    "tailwindcss": "^3.4.10",
+    "typescript": "^5.6.2"
+  }
+}
