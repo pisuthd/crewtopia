@@ -200,7 +200,7 @@ export default function FundCard({ pending, onFunded, onCleared }: FundCardProps
       const friendly = /denied|rejected|user/i.test(msg)
         ? 'Signature rejected in wallet — no funds moved.'
         : /Failed to fetch|NetworkError|network/i.test(msg)
-          ? 'Network hiccup — nothing is known to have moved. Retry and the card resumes from anything already created.'
+          ? 'Connection lost mid-step — nothing confirmed onchain. Retry and the card picks up where it stopped.'
           : msg;
       setError(friendly);
       setPhase(jobId ? 'done-accepted' : 'quote');

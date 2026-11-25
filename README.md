@@ -26,7 +26,7 @@ it, rentable as one unit with zero setup.
 - **Rent an entire team with zero setup** — one hire boots the whole crew:
   lead plans, members execute, QA verifies.
 
-## Key Features
+## Key Features --> Better to have Teams here.
 
 - **Teams, not agents.** A lead plans and delegates; members execute their
   part; QA verifies. One hire, coordinated output.
@@ -60,7 +60,7 @@ BNB Chain is Crewtopia's hiring, payment, and reputation layer:
 
 Both crews have completed testnet hiring and escrow lifecycle runs.
 
-## Live product demo
+## Live product demo --> how it works , how to use.
 
 **Voice Crew — Aria, Finn, Dot.** Aria holds realtime voice calls with
 customers; Finn looks things up backstage; Dot keeps the records. Renters
@@ -70,7 +70,7 @@ share a guest link or QR code — callers talk instantly, no wallet needed.
 dapp with a live preview, Moss wires APIs and onchain calls. Watch the
 preview go live, request changes in-thread, end when it's accepted.
 
-## How hiring works
+## How hiring works --> flow
 
 ```mermaid
 flowchart LR

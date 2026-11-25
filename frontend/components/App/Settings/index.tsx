@@ -1,20 +1,18 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Plug, ShieldCheck, Sparkles } from 'lucide-react';
+import { Plug, Sparkles } from 'lucide-react';
 import ModalShell from '../ModalShell';
 import { useSession } from '../SessionContext';
 import { getSandboxStatus } from '@/lib/api';
 import SkillsTab from './tabs/SkillsTab';
 import McpTab from './tabs/McpTab';
-import PermissionsTab from './tabs/PermissionsTab';
 
-type Tab = 'skills' | 'mcp' | 'permissions';
+type Tab = 'skills' | 'mcp';
 
-const TABS: Array<{ id: Tab; label: string; icon: typeof ShieldCheck }> = [
+const TABS: Array<{ id: Tab; label: string; icon: typeof Plug }> = [
   { id: 'skills', label: 'Skills', icon: Sparkles },
   { id: 'mcp', label: 'MCP', icon: Plug },
-  { id: 'permissions', label: 'Permissions', icon: ShieldCheck },
 ];
 
 export default function SettingsModal({
@@ -86,7 +84,7 @@ export default function SettingsModal({
                 <p className="p-5 text-sm text-wfink">Checking sandbox…</p>
               ) : tab === 'skills' ? (
                 <SkillsTab token={token} />
-              ) : tab === 'mcp' ? (
+              ) : (
                 <McpTab
                   token={token}
                   onAdd={() => {
@@ -94,8 +92,6 @@ export default function SettingsModal({
                     onAddConnector();
                   }}
                 />
-              ) : (
-                <PermissionsTab token={token} />
               )}
             </div>
           </div>
