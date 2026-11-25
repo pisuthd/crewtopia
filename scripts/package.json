@@ -28,7 +28,8 @@
     "api:hire-dev-todo": "tsx api/6-hire-dev-todo.ts",
     "voice:engine": "tsx voice/0-engine.ts",
     "voice:token": "tsx voice/1-token.ts",
-    "voice:turn": "tsx voice/2-turn.ts"
+    "voice:turn": "tsx voice/2-turn.ts",
+    "memory:brain": "tsx living-brain/0-brain.ts"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.1175.0",
@@ -37,6 +38,7 @@
     "@aws-sdk/lib-dynamodb": "^3.1175.0",
     "@bnbagent/sdk": "^0.6.1",
     "@elevenlabs/elevenlabs-js": "^2.79.0",
+    "@living-brain/sdk": "^0.3.1",
     "viem": "^2.24.0"
   },
   "devDependencies": {
