@@ -10,7 +10,8 @@
  *
  * Run:  npm run test:7
  * Env:  PRIVATE_KEY, WALLET_PASSWORD, NETWORK (default bsc-testnet),
- *         TASK (default "Build a landing page preview"), PRICE_U (default "0.01")
+ *         TASK (default "Build a landing page preview"), TEAM (default
+ *         "crewtopia-dev-crew"), PRICE_U (default "0.01")
  * Saves: .last-job.json { jobId, price, network } for script 9.
  */
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
@@ -30,6 +31,7 @@ async function main(): Promise<void> {
   const password = process.env.WALLET_PASSWORD;
   if (!password) throw new Error("WALLET_PASSWORD is required in scripts/.env");
   const task = process.env.TASK ?? "Build a landing page preview";
+  const team = process.env.TEAM ?? "crewtopia-dev-crew";
 
   const wallet = new EVMWalletProvider({ password, privateKey });
   const client = await ERC8183Client.create({ walletProvider: wallet, network });
@@ -58,7 +60,7 @@ async function main(): Promise<void> {
 
   const disputeWindow = await client.policy.disputeWindow();
   const expiredAt = BigInt(Math.floor(Date.now() / 1000)) + disputeWindow + 600n;
-  const description = JSON.stringify({ task, team: "crewtopia-web3-dev", network });
+  const description = JSON.stringify({ task, team, network });
 
   const created = await client.createJob({ provider: me, expiredAt, description });
   if (created.jobId === null) throw new Error("createJob did not return a jobId");
@@ -72,7 +74,7 @@ async function main(): Promise<void> {
   const funded = await client.fund(jobId, price);
   console.log(`  fund → ${funded.transactionHash ?? "ok"}`);
 
-  const manifest = { jobId: jobId.toString(), task, team: "crewtopia-web3-dev", price: price.toString(), network };
+  const manifest = { jobId: jobId.toString(), task, team, price: price.toString(), network };
   const manifestJson = JSON.stringify(manifest);
   const dataDir = join(ROOT, "..", ".agent-data");
   if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });

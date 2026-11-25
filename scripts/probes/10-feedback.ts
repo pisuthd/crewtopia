@@ -77,6 +77,9 @@ async function main(): Promise<void> {
   agentId = agentId || 2892;
   const price = Number(process.env.PRICE ?? 100);
   const tag2 = process.env.TAG2 ?? "happy-path";
+  const endpoint =
+    process.env.ENDPOINT ??
+    "https://h9907ecjy9.execute-api.ap-southeast-1.amazonaws.com/prod/.well-known/agent-card.json";
 
   // Feedback file hash (off-chain payload reference): keccak of a small receipt.
   const receipt = JSON.stringify({ agentId, jobId, client: account.address, value: price, tag1: "completed", tag2, settleTx, at: new Date().toISOString() });
@@ -86,7 +89,7 @@ async function main(): Promise<void> {
     address: REPUTATION_REGISTRY,
     abi: GIVE_FEEDBACK_ABI,
     functionName: "giveFeedback",
-    args: [BigInt(agentId), BigInt(price), 0, "completed", tag2, "https://h9907ecjy9.execute-api.ap-southeast-1.amazonaws.com/prod/.well-known/agent-card.json", "", feedbackHash],
+    args: [BigInt(agentId), BigInt(price), 0, "completed", tag2, endpoint, "", feedbackHash],
     chain: bscTestnet,
     account,
   });
