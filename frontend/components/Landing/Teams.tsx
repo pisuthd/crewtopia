@@ -1,7 +1,9 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Hexbot, { type HexbotColor, type HexbotRole } from '../Hexbot';
+import { getFeedbackTally } from '@/lib/feedback';
 
 interface TeamCard {
   members: { color: HexbotColor; role: HexbotRole }[];
@@ -114,6 +116,17 @@ export default function Teams() {
 }
 
 function CardBody({ card }: { card: TeamCard }) {
+  const [tally, setTally] = useState<{ count: number; avg: number } | null>(null);
+  useEffect(() => {
+    if (!card.live) return;
+    let alive = true;
+    getFeedbackTally(card.slug).then((t) => {
+      if (alive && t && t.count > 0) setTally({ count: t.count, avg: t.avg });
+    }).catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [card.slug, card.live]);
   return (
     <>
       <div className="flex items-start justify-between gap-3">
@@ -135,6 +148,11 @@ function CardBody({ card }: { card: TeamCard }) {
         )}
       </p>
       <p className="mt-1.5 text-sm leading-relaxed text-ink">{card.tagline}</p>
+      {tally && (
+        <p className="mt-1.5 text-xs font-semibold text-navy" title="Buyer ratings recorded onchain">
+          ★ {tally.avg.toFixed(1)} · {tally.count} onchain rating{tally.count === 1 ? '' : 's'}
+        </p>
+      )}
       <p className="mt-2 text-xs leading-relaxed text-ink/70">{card.roles}</p>
       <div className="mt-3 flex flex-wrap items-center gap-1.5">
         {card.pipeline.map((step, i) => (

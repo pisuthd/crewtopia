@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowLeft, Loader2, Plus, Trash2, Users, X } from 'lucide-react';
 import ModalShell from './ModalShell';
+import { savePendingFeedback } from '@/lib/feedback';
 import ConfirmModal from './ConfirmModal';
 import FundCard from './FundCard';
 import { useSession } from './SessionContext';
@@ -210,6 +211,7 @@ export default function TeamModal({ open, onClose, onHired, rentals, renewTask }
     }
     setQuote(null);
     setStep({ name: 'list' });
+    savePendingFeedback(crew.taskId, crew.teamId);
     onHired();
     return null;
   };

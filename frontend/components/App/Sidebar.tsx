@@ -18,6 +18,7 @@ import TokensModal from './TokensModal';
 import ConnectorsModal from './ConnectorsModal';
 import SettingsModal from './Settings';
 import { truncateAddress } from '@/lib/wallet';
+import { savePendingFeedback } from '@/lib/feedback';
 import { AnimatePresence, motion } from 'framer-motion';
 
 interface SidebarProps {
@@ -164,6 +165,7 @@ export default function Sidebar({
         return e instanceof Error ? e.message : 'Could not end the rental.';
       }
     }
+    savePendingFeedback(crew.taskId, crew.teamId);
     onChanged();
     onChanged();
     if (selectedId?.startsWith(`m:${crew.taskId}:`)) onSelect('');

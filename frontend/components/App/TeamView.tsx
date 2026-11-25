@@ -1,13 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Menu, PanelRight, PhoneCall } from 'lucide-react';
 import Link from 'next/link';
 import Hexbot from '../Hexbot';
 import MemberChat from './MemberChat';
 import BotPanel from './BotPanel';
+import RatingCard from './RatingCard';
 import type { MemberMeta } from './crew';
 import type { LiveCrew } from '@/lib/api';
+import { loadPendingFeedback, type PendingFeedback } from '@/lib/feedback';
+
+const TEAM_DISPLAY: Record<string, string> = { 'dev-crew': 'Dev Crew', 'voice-crew': 'Voice Crew' };
 
 interface TeamViewProps {
   memberTaskId: string | null;
@@ -21,6 +25,12 @@ interface TeamViewProps {
 
 export default function TeamView({ memberTaskId, memberRole, memberMeta, roster, crew, onOpenSidebar, onFundMore }: TeamViewProps) {
   const [panelOpen, setPanelOpen] = useState(false);
+  const [pending, setPending] = useState<PendingFeedback | null>(null);
+  // Post-rental rating: crews vanish from /rent/team once ended, so the
+  // pending prompt (saved at end-rental) is the trigger, not live state.
+  useEffect(() => {
+    setPending(crew ? null : loadPendingFeedback());
+  }, [crew]);
   // Voice entry: voice crews only, and only on ticked-mic threads (concierge by default).
   const canTalk =
     !!memberTaskId &&
@@ -105,7 +115,15 @@ export default function TeamView({ memberTaskId, memberRole, memberMeta, roster,
             onFundMore={onFundMore}
           />
         ) : (
-          <div className="grid flex-1 place-items-center px-6">
+          <div className="grid flex-1 place-items-center gap-4 overflow-y-auto px-6 py-8">
+            {pending && (
+              <RatingCard
+                taskId={pending.taskId}
+                teamId={pending.teamId}
+                teamName={TEAM_DISPLAY[pending.teamId] ?? 'the crew'}
+                onDone={() => setPending(null)}
+              />
+            )}
             <div className="max-w-sm text-center">
               <p className="font-brico text-xl font-bold text-wfnavy">No member selected</p>
               <p className="mt-1 text-sm text-wfink">
