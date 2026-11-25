@@ -1229,6 +1229,87 @@ export async function handleCrewContextCompact(address: string, params: Record<s
   };
 }
 
+const MCP_NAME_RE = /^[A-Za-z0-9_-]{1,64}$/;
+const LB_URL = 'https://livingbrain.fernmcp.dev/livingbrain';
+
+/** POST /rent/io/mcp (session-authed): relay MCP registry ops to the renter's
+ * sandbox VM. Body: { op: 'list' | 'save' | 'patch' | 'remove' | 'restart',
+ * name?, url?, headers?, disabledTools? }. Only https URLs; header values are
+ * never logged. VM redacts secret values (configKeys only) in list output. */
+export async function handleMcpRelay(address: string, body: any) {
+  const owner = address.toLowerCase();
+  const op = String(body?.op ?? '');
+  if (!['list', 'save', 'patch', 'remove', 'restart'].includes(op)) {
+    return { statusCode: 400, body: { error: "op must be list|save|patch|remove|restart" } };
+  }
+  const sb = await resolveSandboxVm(owner).catch(() => null);
+  if (!sb) return { statusCode: 409, body: { error: 'boot your sandbox first' } };
+  let tokenStr: string;
+  try {
+    tokenStr = await vmToken(sb.vmId);
+  } catch {
+    return { statusCode: 502, body: { error: 'sandbox auth failed' } };
+  }
+  const callVm = async (method: string, path: string, payload?: unknown) => {
+    const res = await fetch(`https://${(sb as any).endpoint}${path}`, {
+      method,
+      headers: { 'X-aws-proxy-auth': tokenStr, 'content-type': 'application/json' },
+      body: payload === undefined ? undefined : JSON.stringify(payload),
+      signal: AbortSignal.timeout(30_000),
+    });
+    const data = await res.json().catch(() => ({}));
+    return { status: res.status, data };
+  };
+  try {
+    if (op === 'list') {
+      const r = await callVm('GET', '/mcp');
+      return { statusCode: r.status, body: r.data };
+    }
+    const name = String(body?.name ?? '');
+    if (!MCP_NAME_RE.test(name)) {
+      return { statusCode: 400, body: { error: 'bad server name (A-Za-z0-9_-, max 64)' } };
+    }
+    if (op === 'remove') {
+      const r = await callVm('DELETE', `/mcp/${name}`);
+      return { statusCode: r.status, body: r.data };
+    }
+    if (op === 'restart') {
+      const r = await callVm('POST', `/mcp/${name}/restart`);
+      return { statusCode: r.status, body: r.data };
+    }
+    // save | patch: strict shape — https URL, string-map headers, string[] tools.
+    const cfg: Record<string, unknown> = {};
+    if (body?.url !== undefined) {
+      const url = String(body.url);
+      if (!url.startsWith('https://') || url.length > 500) {
+        return { statusCode: 400, body: { error: 'url must be https (max 500 chars)' } };
+      }
+      cfg.url = url;
+    }
+    if (body?.headers !== undefined) {
+      const h = body.headers as Record<string, unknown>;
+      const keys = Object.keys(h ?? {});
+      if (!h || typeof h !== 'object' || keys.length > 20 || keys.some((k) => typeof h[k] !== 'string' || (h[k] as string).length > 2000)) {
+        return { statusCode: 400, body: { error: 'headers must be a small string map' } };
+      }
+      cfg.headers = h;
+    }
+    if (body?.disabledTools !== undefined) {
+      const dt = body.disabledTools;
+      if (!Array.isArray(dt) || dt.length > 60 || dt.some((t) => typeof t !== 'string')) {
+        return { statusCode: 400, body: { error: 'disabledTools must be string[]' } };
+      }
+      cfg.disabledTools = dt;
+    }
+    const r = op === 'save'
+      ? await callVm('POST', '/mcp', { name, ...cfg })
+      : await callVm('PATCH', `/mcp/${name}`, cfg);
+    return { statusCode: r.status, body: r.data };
+  } catch {
+    return { statusCode: 502, body: { error: 'sandbox unreachable' } };
+  }
+}
+
 const TEXTISH = /^(text\/|application\/(json|javascript|x-javascript|xml|xhtml\+xml)|image\/svg\+xml)/;
 
 async function fetchFromVm(endpoint: string, token: string, path: string) {
