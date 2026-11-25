@@ -576,9 +576,7 @@ function WalletFooter({ onOpen, onRequestTokens }: { onOpen: () => void; onReque
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/connectors/living-brain.png" alt="" className="h-5 w-5 rounded-full bg-white object-contain ring-2 ring-white" loading="lazy" />
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/connectors/mailchimp.png" alt="" className="h-5 w-5 rounded-full bg-white object-contain ring-2 ring-white" loading="lazy" />
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/connectors/stripe.png" alt="" className="h-5 w-5 rounded-full bg-white object-contain ring-2 ring-white" loading="lazy" />
+            <img src="/connectors/cournot.png" alt="" className="h-5 w-5 rounded-full bg-white object-contain ring-2 ring-white" loading="lazy" />
           </span>
         </button>
       </div>

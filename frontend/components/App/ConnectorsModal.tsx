@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowLeft, Check, Loader2, Plug, X } from 'lucide-react';
+import { ArrowLeft, Check, Loader2, X } from 'lucide-react';
 import ModalShell from './ModalShell';
 import { useSession } from './SessionContext';
 import {
@@ -42,13 +42,12 @@ function loadSubject(): string {
 export default function ConnectorsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { token } = useSession();
   const [servers, setServers] = useState<Record<string, McpServerInfo>>({});
-  const [skillCount, setSkillCount] = useState<number | null>(null);
+  const [skillNames, setSkillNames] = useState<string[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [sandboxLive, setSandboxLive] = useState<boolean | null>(null);
-  const [detail, setDetail] = useState<'brain' | 'skill' | null>(null);
+  const [detail, setDetail] = useState<'brain' | 'cournot' | null>(null);
   const [apiKey, setApiKey] = useState('');
   const [subject, setSubject] = useState('');
-  const [source, setSource] = useState('');
   const [resolved, setResolved] = useState<SkillResolveResult | null>(null);
   const [working, setWorking] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
@@ -74,7 +73,7 @@ export default function ConnectorsModal({ open, onClose }: { open: boolean; onCl
         const map: Record<string, McpServerInfo> = {};
         for (const s of list) map[s.name] = s;
         setServers(map);
-        setSkillCount(skills.length);
+        setSkillNames(skills.map((s) => s.name));
       } finally {
         if (alive) setLoading(false);
       }
@@ -88,13 +87,21 @@ export default function ConnectorsModal({ open, onClose }: { open: boolean; onCl
     if (!open) {
       setDetail(null);
       setApiKey('');
-      setSource('');
       setResolved(null);
       setResult(null);
     }
   }, [open ]);
 
+  // Cournot card previews on open — one tap to install from there.
+  useEffect(() => {
+    if (detail === 'cournot' && token && sandboxLive && !resolved && !result && !working) {
+      void doResolve();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detail, sandboxLive]);
+
   const installed = servers[LB_NAME];
+  const cournotInstalled = (skillNames ?? []).some((n) => /cournot/i.test(n));
 
   async function refresh(): Promise<McpServerInfo[]> {
     if (!token) return [];
@@ -195,16 +202,11 @@ export default function ConnectorsModal({ open, onClose }: { open: boolean; onCl
 
   async function doResolve() {
     if (!token || working) return;
-    const src = source.trim();
-    if (!src) {
-      setResult({ ok: false, message: 'Paste a skill source first.' });
-      return;
-    }
     setWorking(true);
     setResult(null);
     setResolved(null);
     try {
-      const r = await resolveSkill(token, src);
+      const r = await resolveSkill(token, COURNOT_SOURCE);
       if (r.error) {
         setResult({ ok: false, message: r.error });
         return;
@@ -219,25 +221,23 @@ export default function ConnectorsModal({ open, onClose }: { open: boolean; onCl
 
   async function doInstall(overwrite = false) {
     if (!token || working) return;
-    const src = source.trim();
-    if (!src) return;
     setWorking(true);
     setResult(null);
     try {
-      const r = await installSkill(token, src, overwrite);
+      const r = await installSkill(token, COURNOT_SOURCE, overwrite);
       if (r.error) {
         setResult({ ok: false, message: r.error });
         return;
       }
       if (r.choices) {
         setResolved({ choices: r.choices as SkillResolveResult['choices'], hint: r.hint });
-        setResult({ ok: false, message: 'That source holds several skills — pick one, then install.' });
+        setResult({ ok: false, message: 'Unexpected multi-skill response — retry.' });
         return;
       }
       const skills = await getSkills(token).catch(() => []);
-      setSkillCount(skills.length);
+      setSkillNames(skills.map((s) => s.name));
       setResolved(null);
-      setResult({ ok: true, message: 'Installed — your bots can load it from chat now.' });
+      setResult({ ok: true, message: 'Installed — your bots can load Cournot from chat now.' });
     } catch (e) {
       setResult({ ok: false, message: e instanceof Error ? e.message : 'Install failed.' });
     } finally {
@@ -282,7 +282,7 @@ export default function ConnectorsModal({ open, onClose }: { open: boolean; onCl
                     <ArrowLeft className="h-4 w-4" strokeWidth={2.2} />
                   </button>
                 )}
-                {detail === 'skill' ? 'Install a skill' : detail === 'brain' ? 'Living Brain' : 'Connectors'}
+                {detail === 'cournot' ? 'Cournot Intelligence' : detail === 'brain' ? 'Living Brain' : 'Connectors'}
               </h2>
               <button
                 onClick={onClose}
@@ -317,34 +317,33 @@ export default function ConnectorsModal({ open, onClose }: { open: boolean; onCl
                     <span className="shrink-0 rounded-full bg-wfice px-2.5 py-1 text-xs font-bold text-wfnavy">Import</span>
                   )}
                 </button>
-                <p className="mt-3 text-xs leading-relaxed text-wfink">
-                  More connectors land here — each one becomes tools your whole crew can use.
-                </p>
                 <button
-                  onClick={() => setDetail('skill')}
+                  onClick={() => setDetail('cournot')}
                   className="flex w-full items-center gap-3 rounded-xl border border-wfnavy/10 px-4 py-3 text-left hover:bg-wfice/50"
                 >
-                  <span className="grid h-10 w-10 place-items-center rounded-xl bg-wfice text-cta">
-                    <Plug className="h-5 w-5" strokeWidth={1.8} />
-                  </span>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/connectors/cournot.png" alt="" className="h-10 w-10 rounded-xl bg-white object-contain" loading="lazy" />
                   <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-bold text-wfnavy">Install a skill</span>
-                    <span className="block truncate text-xs text-wfink">Teach your bots a new workflow from a repo link</span>
+                    <span className="block text-sm font-bold text-wfnavy">Cournot Intelligence</span>
+                    <span className="block truncate text-xs text-wfink">Probability answers for crypto events</span>
                   </span>
-                  {skillCount !== null && skillCount > 0 ? (
-                    <span className="shrink-0 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">
-                      {skillCount} installed
+                  {cournotInstalled ? (
+                    <span className="flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">
+                      <Check className="h-3 w-3" /> Installed
                     </span>
                   ) : (
                     <span className="shrink-0 rounded-full bg-wfice px-2.5 py-1 text-xs font-bold text-wfnavy">Import</span>
                   )}
                 </button>
+                <p className="mt-3 text-xs leading-relaxed text-wfink">
+                  More connectors land here — each one becomes tools your whole crew can use.
+                </p>
               </div>
             ) : detail === 'brain' ? (
               <div className="mt-4">
                 <p className="text-sm leading-relaxed text-wfnavy">
-                  Give your crew long-term memory. Dot records call notes and decisions;
-                  Aria and the builders recall them with search.
+                  Give your crew long-term memory. Any bot can record notes and
+                  decisions; the whole crew recalls them with search.
                 </p>
                 <ol className="mt-3 list-decimal space-y-1.5 pl-5 text-sm text-wfnavy">
                   <li>Get an API key from your Living Brain dashboard.</li>
@@ -414,21 +413,11 @@ export default function ConnectorsModal({ open, onClose }: { open: boolean; onCl
             ) : (
               <div className="mt-4">
                 <p className="text-sm leading-relaxed text-wfnavy">
-                  Teach your bots a new workflow. Paste a source, preview what it
-                  contains, then install — it lands in Settings → Skills.
+                  Probability answers for crypto events. Ask <span className="font-mono text-xs">/cournot</span> in
+                  chat — get a number, the claim it was computed against, and the sources behind it.
                 </p>
-                <button
-                  onClick={() => { setSource(COURNOT_SOURCE); setResolved(null); setResult(null); }}
-                  className="mt-3 flex w-full items-center gap-3 rounded-xl border border-dashed border-wfnavy/20 px-4 py-3 text-left hover:bg-wfice/50"
-                >
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-bold text-wfnavy">Try Cournot Intelligence</span>
-                    <span className="block text-xs text-wfink">Probability answers for crypto events — fills the source for you</span>
-                  </span>
-                  <span className="shrink-0 rounded-full bg-wfice px-2.5 py-1 text-xs font-bold text-wfnavy">Fill</span>
-                </button>
                 <p className="mt-2 text-xs text-wfink">
-                  Skill installs free. Cournot answers cost calls (3 free/account, then paid) — needs your Cournot account.
+                  Skill installs free. Answers cost Cournot calls (3 free/account, then paid) — needs your Cournot account.
                 </p>
                 {sandboxLive === false && (
                   <div className="mt-3 rounded-xl bg-amber-50 px-4 py-3 text-sm">
@@ -443,24 +432,20 @@ export default function ConnectorsModal({ open, onClose }: { open: boolean; onCl
                     </button>
                   </div>
                 )}
-                <label className="mt-4 block text-xs font-bold text-wfnavy">Skill source</label>
-                <input
-                  value={source}
-                  onChange={(e) => { setSource(e.target.value); setResolved(null); }}
-                  placeholder="owner/repo[/path], GitHub URL, or SKILL.md URL"
-                  autoComplete="off"
-                  spellCheck={false}
-                  className="mt-1 w-full rounded-xl border border-wfnavy/15 bg-white px-4 py-2.5 font-mono text-xs text-wfnavy outline-none placeholder:text-wfink/60 focus:border-cta"
-                />
-                <div className="mt-3 flex justify-end">
-                  <button
-                    onClick={doResolve}
-                    disabled={working || sandboxLive !== true || !source.trim()}
-                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-wfnavy px-5 py-2 text-sm font-bold text-white disabled:opacity-50"
-                  >
-                    {working && <Loader2 className="h-4 w-4 animate-spin" />}
-                    Preview
-                  </button>
+                <div className="mt-4 rounded-xl border border-wfnavy/10 bg-wfice/60 px-4 py-3">
+                  <p className="font-mono text-[11px] text-wfink">{COURNOT_SOURCE}</p>
+                  {!resolved?.preview && (
+                    <div className="mt-3 flex justify-end">
+                      <button
+                        onClick={doResolve}
+                        disabled={working || sandboxLive !== true}
+                        className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-wfnavy px-5 py-2 text-sm font-bold text-white disabled:opacity-50"
+                      >
+                        {working && <Loader2 className="h-4 w-4 animate-spin" />}
+                        Preview
+                      </button>
+                    </div>
+                  )}
                 </div>
                 {resolved?.preview && (
                   <div className="mt-3 rounded-xl border border-wfnavy/10 bg-wfice/60 p-4">
