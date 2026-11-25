@@ -547,3 +547,52 @@ export async function mintPreview(token: string, port = 5173): Promise<{ path: s
   const path = String(out.path);
   return { path, url: `${API}${path}` };
 }
+
+/** Sandbox MCP registry (the team's tool connectors). Relayed through the
+ * backend — secret values never leave the computer (list shows key names). */
+export interface McpServerInfo {
+  name: string;
+  type: 'stdio' | 'remote';
+  isActive: boolean;
+  configKeys: string[];
+  disabledTools: string[];
+  status: 'connected' | 'error' | 'unknown';
+  tools: number;
+  lastError?: string;
+}
+
+async function mcpRelay(token: string, body: Record<string, unknown>): Promise<Record<string, unknown>> {
+  return api('/rent/io/mcp', token, { method: 'POST', body: JSON.stringify(body) });
+}
+
+export async function getMcpServers(token: string): Promise<McpServerInfo[]> {
+  const out = await mcpRelay(token, { op: 'list' });
+  return (out.servers as McpServerInfo[]) ?? [];
+}
+
+export async function saveMcpServer(
+  token: string,
+  cfg: { name: string; url?: string; headers?: Record<string, string>; disabledTools?: string[] },
+): Promise<McpServerInfo[]> {
+  const out = await mcpRelay(token, { op: 'save', ...cfg });
+  return (out.servers as McpServerInfo[]) ?? [];
+}
+
+export async function patchMcpServer(
+  token: string,
+  name: string,
+  cfg: { url?: string; headers?: Record<string, string>; disabledTools?: string[] },
+): Promise<McpServerInfo[]> {
+  const out = await mcpRelay(token, { op: 'patch', name, ...cfg });
+  return (out.servers as McpServerInfo[]) ?? [];
+}
+
+export async function restartMcpServer(token: string, name: string): Promise<McpServerInfo[]> {
+  const out = await mcpRelay(token, { op: 'restart', name });
+  return (out.servers as McpServerInfo[]) ?? [];
+}
+
+export async function removeMcpServer(token: string, name: string): Promise<McpServerInfo[]> {
+  const out = await mcpRelay(token, { op: 'remove', name });
+  return (out.servers as McpServerInfo[]) ?? [];
+}
