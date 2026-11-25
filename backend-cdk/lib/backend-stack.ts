@@ -50,6 +50,17 @@ export class CrewtopiaBackendStack extends cdk.Stack {
     tasksTable.grantReadWriteData(a2aFn);
     a2aFn.addEnvironment('TASKS_TABLE', tasksTable.tableName);
 
+    // App-submitted onchain feedback tally: one row per (teamId, tx).
+    // The chain stays source of truth; this is a readable index for the
+    // landing page (public RPCs can't scan registry events). Granted to
+    // appFn below (declared later in this file).
+    const feedbackTable = new dynamodb.Table(this, 'FeedbackTable', {
+      partitionKey: { name: 'teamId', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'tx', type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: cdk.RemovalPolicy.DESTROY, // testnet dry run; revisit for mainnet
+    });
+
     // Phase 6: wallet sign-in + profiles. Nonces are single-use with a
     // Dynamo TTL; profiles are keyed by lowercase wallet address.
     const noncesTable = new dynamodb.Table(this, 'NoncesTable', {
@@ -197,6 +208,8 @@ export class CrewtopiaBackendStack extends cdk.Stack {
     );
     appFn.addEnvironment('PROFILES_TABLE', profilesTable.tableName);
     appFn.addEnvironment('TASKS_TABLE', tasksTable.tableName);
+    feedbackTable.grantReadWriteData(appFn);
+    appFn.addEnvironment('FEEDBACK_TABLE', feedbackTable.tableName);
     appFn.addEnvironment('SANDBOX_TABLE', sandboxTable.tableName);
     appFn.addEnvironment('TEAM_REGISTRY_TABLE', teamRegistryTable.tableName);
     appFn.addEnvironment('SESSION_SECRET', sessionSecret);

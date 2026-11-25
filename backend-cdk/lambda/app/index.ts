@@ -1,6 +1,6 @@
 import type { APIGatewayProxyHandler } from 'aws-lambda';
 import { requireAuth } from '../auth/tokens';
-import { handleApprovalResolve, handleBotRequestAnswer, handleCrewAddMember, handleCrewChat, handleCrewChatPoll, handleCrewContextClear, handleCrewGates, handleMemberHistory, handlePending, handlePreviewProxy, handlePreviewToken, handleProviders, handleQuestionAnswer, handleCrewFiles, handleCrewFileDownload, handleCrewContextCompact, handleVoiceStatus, handleVoiceToken, handleGuestVoiceToken, handleGuestVoiceConfig, handleGuestLinkCreate, handleGuestLinkGet, handleGuestLinkDelete, handleMcpRelay, handleSkillsRelay, handlePermissionsRelay, handleSandboxBoot, handleSandboxResume, handleSandboxShutdown, handleSandboxStatus, handleSandboxTerminate, handleSandboxToken, handleSandboxFileUpload, handleTeam, handleTeamCreate, handleTeamDelete, handleTeamUpdate, handleTeamsList, handleQuoteCreate, handleVoiceTranscribe } from './handlers';
+import { handleApprovalResolve, handleBotRequestAnswer, handleCrewAddMember, handleCrewChat, handleCrewChatPoll, handleCrewContextClear, handleCrewGates, handleMemberHistory, handlePending, handlePreviewProxy, handlePreviewToken, handleProviders, handleQuestionAnswer, handleCrewFiles, handleCrewFileDownload, handleCrewContextCompact, handleVoiceStatus, handleVoiceToken, handleGuestVoiceToken, handleGuestVoiceConfig, handleGuestLinkCreate, handleGuestLinkGet, handleGuestLinkDelete, handleMcpRelay, handleSkillsRelay, handlePermissionsRelay, handleFeedbackSubmit, handleFeedbackList, handleSandboxBoot, handleSandboxResume, handleSandboxShutdown, handleSandboxStatus, handleSandboxTerminate, handleSandboxToken, handleSandboxFileUpload, handleTeam, handleTeamCreate, handleTeamDelete, handleTeamUpdate, handleTeamsList, handleQuoteCreate, handleVoiceTranscribe } from './handlers';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -64,6 +64,10 @@ export const handler: APIGatewayProxyHandler = async (event) => {
         }
         if (ioRoute === 'GET voice/guest-token') {
           const r = await handleGuestVoiceToken(event.queryStringParameters ?? {});
+          return json(r.statusCode, r.body);
+        }
+        if (ioRoute === 'GET teams/feedback') {
+          const r = await handleFeedbackList(event.queryStringParameters ?? {});
           return json(r.statusCode, r.body);
         }
       }
@@ -171,6 +175,10 @@ export const handler: APIGatewayProxyHandler = async (event) => {
         }
         if (ioRoute === 'POST permissions') {
           const r = await handlePermissionsRelay(address, body);
+          return json(r.statusCode, r.body);
+        }
+        if (ioRoute === 'POST teams/feedback') {
+          const r = await handleFeedbackSubmit(address, body);
           return json(r.statusCode, r.body);
         }
         return json(404, { error: 'unknown route' });

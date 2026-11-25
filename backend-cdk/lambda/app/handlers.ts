@@ -1259,6 +1259,74 @@ async function relayToVm(address: string, method: string, path: string, payload?
 
 const SKILL_NAME_RE = /^[A-Za-z0-9-]{1,64}$/;
 
+/** POST /rent/io/teams/feedback (session-authed): record an app-submitted
+ * onchain rating. Body: { taskId, tx, stars }. The task must belong to the
+ * buyer and be a static crew (customs share Dev's agent — no misattribution).
+ * Idempotent per tx. The chain stays source of truth; this is the readable
+ * index the landing page shows (public RPCs can't scan registry events). */
+const FEEDBACK_TEAMS = new Set(['dev-crew', 'voice-crew']);
+export async function handleFeedbackSubmit(address: string, body: any) {
+  const owner = address.toLowerCase();
+  const taskId = String(body?.taskId ?? '');
+  const tx = String(body?.tx ?? '').toLowerCase();
+  const stars = Math.max(1, Math.min(5, Math.round(Number(body?.stars ?? 0))));
+  if (!taskId || !/^0x[0-9a-f]{64}$/.test(tx) || !stars) {
+    return { statusCode: 400, body: { error: 'need taskId, 0x tx hash, stars 1-5' } };
+  }
+  const task: any = await getTask(taskId).catch(() => null);
+  if (!task || !task.buyer || String(task.buyer).toLowerCase() !== owner) {
+    return { statusCode: 404, body: { error: 'unknown rental' } };
+  }
+  const teamId = String(task.teamId ?? 'dev-crew');
+  if (!FEEDBACK_TEAMS.has(teamId)) {
+    return { statusCode: 400, body: { error: 'only Dev and Voice crews take onchain feedback' } };
+  }
+  const { DynamoDBDocumentClient } = await import('@aws-sdk/lib-dynamodb');
+  const { DynamoDBClient } = await import('@aws-sdk/client-dynamodb');
+  const { PutCommand } = await import('@aws-sdk/lib-dynamodb');
+  const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+  const table = process.env.FEEDBACK_TABLE ?? '';
+  if (!table) return { statusCode: 503, body: { error: 'feedback tally not configured' } };
+  await ddb.send(new PutCommand({
+    TableName: table,
+    Item: { teamId, tx, stars, buyer: owner, taskId, at: new Date().toISOString() },
+    ConditionExpression: 'attribute_not_exists(tx)',
+  })).catch((e: any) => {
+    if (e?.name !== 'ConditionalCheckFailedException') throw e;
+  });
+  return { statusCode: 200, body: { ok: true } };
+}
+
+/** GET /rent/io/teams/feedback?teamId= (public): app-submitted ratings tally. */
+export async function handleFeedbackList(params: Record<string, string | undefined>) {
+  const teamId = String(params.teamId ?? '');
+  if (!FEEDBACK_TEAMS.has(teamId)) {
+    return { statusCode: 400, body: { error: 'unknown team' } };
+  }
+  const { DynamoDBDocumentClient, QueryCommand } = await import('@aws-sdk/lib-dynamodb');
+  const { DynamoDBClient } = await import('@aws-sdk/client-dynamodb');
+  const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+  const table = process.env.FEEDBACK_TABLE ?? '';
+  if (!table) return { statusCode: 503, body: { error: 'feedback tally not configured' } };
+  const out: any = await ddb.send(new QueryCommand({
+    TableName: table,
+    KeyConditionExpression: 'teamId = :t',
+    ExpressionAttributeValues: { ':t': teamId },
+  })).catch(() => ({ Items: [] }));
+  const items = (out.Items ?? []) as Array<{ stars?: number; tx?: string; at?: string }>;
+  const stars = items.map((i) => Number(i.stars ?? 0)).filter((s) => s >= 1 && s <= 5);
+  const avg = stars.length ? Math.round((stars.reduce((a, b) => a + b, 0) / stars.length) * 10) / 10 : 0;
+  return {
+    statusCode: 200,
+    body: {
+      teamId,
+      count: stars.length,
+      avg,
+      ratings: items.map((i) => ({ stars: i.stars, tx: i.tx, at: i.at })).slice(0, 50),
+    },
+  };
+}
+
 /** POST /rent/io/skills (session-authed): { op, name?, source?, overwrite? }.
  * list|remove as before; resolve previews a source; install saves it after
  * the buyer confirms the preview in the UI (same gating as chat import). */
