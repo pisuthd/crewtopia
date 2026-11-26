@@ -154,6 +154,7 @@ function CardBody({ card }: { card: TeamCard }) {
         </p>
       )}
       <p className="mt-2 text-xs leading-relaxed text-ink/70">{card.roles}</p>
+      {!tally && (
       <div className="mt-3 flex flex-wrap items-center gap-1.5">
         {card.pipeline.map((step, i) => (
           <span key={step} className="flex items-center gap-1.5">
@@ -164,6 +165,7 @@ function CardBody({ card }: { card: TeamCard }) {
           </span>
         ))}
       </div>
+      )}
       <div className="mt-auto flex gap-2 pt-5">
         {card.live ? (
           <Link

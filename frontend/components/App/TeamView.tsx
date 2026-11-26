@@ -102,6 +102,16 @@ export default function TeamView({ memberTaskId, memberRole, memberMeta, roster,
         </span>
         </header>
 
+        {pending && (
+          <div className="px-6 pt-4">
+            <RatingCard
+              taskId={pending.taskId}
+              teamId={pending.teamId}
+              teamName={TEAM_DISPLAY[pending.teamId] ?? 'the crew'}
+              onDone={() => setPending(null)}
+            />
+          </div>
+        )}
         {memberMeta && memberTaskId && memberRole ? (
           <MemberChat
             taskId={memberTaskId}
@@ -116,14 +126,6 @@ export default function TeamView({ memberTaskId, memberRole, memberMeta, roster,
           />
         ) : (
           <div className="grid flex-1 place-items-center gap-4 overflow-y-auto px-6 py-8">
-            {pending && (
-              <RatingCard
-                taskId={pending.taskId}
-                teamId={pending.teamId}
-                teamName={TEAM_DISPLAY[pending.teamId] ?? 'the crew'}
-                onDone={() => setPending(null)}
-              />
-            )}
             <div className="max-w-sm text-center">
               <p className="font-brico text-xl font-bold text-wfnavy">No member selected</p>
               <p className="mt-1 text-sm text-wfink">

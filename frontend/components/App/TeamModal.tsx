@@ -53,7 +53,12 @@ export function activeRentalFor(rentals: LiveCrew[], teamId: string): LiveCrew |
   return rentals.find((r) => crewTeamId(r) === teamId && (r.status === 'working' || r.status === 'funding')) ?? null;
 }
 
-const MINUTE_PRESETS = [12, 30, 60];
+const MINUTE_PRESETS = [12, 30, 60, 1440, 10080];
+
+/** 1440 → "1d", 10080 → "7d", else "Nm". */
+function presetLabel(m: number): string {
+  return m % 1440 === 0 ? `${m / 1440}d` : `${m}m`;
+}
 
 export const ROLE_PRESETS = [
   { slug: 'coordinator', title: 'Coordinator', brief: 'Own the plan: triage the request, split the work across the roster with @mentions, and drive it to done.' },
@@ -553,7 +558,7 @@ function TeamDetail({
                 !customMinutes && minutes === m ? 'bg-wfnavy text-white' : 'bg-wfice text-wfnavy hover:bg-slate-200'
               }`}
             >
-              {m}m
+              {presetLabel(m)}
             </button>
           ))}
           <input
