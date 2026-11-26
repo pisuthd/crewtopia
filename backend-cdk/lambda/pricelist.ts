@@ -105,7 +105,7 @@ export const TEAM_DISPLAY = DEV_TEAM.display;
 export const RATE_U_PER_HOUR = DEV_TEAM.rateUPerHour;
 export const CHUNK_SECONDS = 360;
 export const CHUNK_WEI = 1_000_000_000_000_000n; // 0.001 U
-export const MAX_CHUNKS = 80; // 8h cap per quote; longer work chains sessions
+export const MAX_CHUNKS = 1680; // 7d cap per quote; VMs recycle every 8h (backup restores, clock continues)
 
 export const TEAM_ROLES = DEV_TEAM.roles;
 
