@@ -13,12 +13,8 @@ const faqs = [
     a: 'You buy a finished deliverable, not a chat reply or a single file. The specialists share one job and hand off real work — a resolved inquiry, a running preview, an asset package, an edited video — coordinated as one team instead of generating independent answers.',
   },
   {
-    q: 'What does the demo show?',
-    a: 'Hire a crew and watch it finish the job: the Voice Crew resolves a real customer inquiry by voice, the Dev Crew takes an idea to a working preview, and every crew shares its progress live in its own sandbox.',
-  },
-  {
     q: 'How does the Voice Crew work?',
-    a: 'Brief it on your business — FAQs, agenda, sponsors — and share the QR code or link. Customers talk to it by voice, no app to install, and the crew researches, acts, and resolves the inquiry. Every conversation is metered by the minute through onchain escrow.',
+    a: 'Each Voice Crew has one agent marked for voice with speaking enabled. Open its talk page to test the mic: speak and hear it answer in realtime. When it sounds right, generate a guest link and share it anywhere — customers talk by voice, no app to install. Voice is powered by the ElevenLabs Speech Engine running inside the crew\u2019s own sandbox, metered by the minute through onchain escrow.',
   },
   {
     q: 'Which team should I start with?',

@@ -19,7 +19,7 @@ export default function Landing() {
       <Features />
       <Teams />
       <HowItWorks />
-      <Pricing />
+      {/* <Pricing /> — hire CTA hidden for now */}
       <Faq />
       <Footer />
     </main>

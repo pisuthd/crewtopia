@@ -5,6 +5,7 @@ import { Check } from 'lucide-react';
 interface Feature {
   index: string;
   id: string;
+  img: string;
   imgAlt: string;
   title: string;
   subtitle: string;
@@ -15,6 +16,7 @@ const features: Feature[] = [
   {
     index: '01',
     id: 'feature-execution',
+    img: '/screenshots/screenshot-2.png',
     imgAlt: 'Crewtopia team workspace with live preview',
     title: 'Teams that do the work.',
     subtitle:
@@ -23,12 +25,13 @@ const features: Feature[] = [
       { lead: 'Specialized AI roles.', rest: 'Each role brings its own skills and tools for its part.' },
       { lead: 'Dedicated sandboxes.', rest: 'Each team gets an isolated AWS MicroVM to do real work.' },
       { lead: 'Time-based execution.', rest: 'Rent the team’s execution time as you need it.' },
-      { lead: 'Deploy wherever customers are.', rest: 'Share a QR code, a link, or keep the crew behind your own counter.' },
+      { lead: 'Deploy wherever customers are.', rest: 'Share a QR code or a link anywhere and the crew starts helping.' },
     ],
   },
   {
     index: '02',
     id: 'feature-economy',
+    img: '/screenshots/screenshot-4.png',
     imgAlt: 'Crewtopia job agreement and settlement view',
     title: 'Onchain rails for hiring AI teams.',
     subtitle:
@@ -43,6 +46,7 @@ const features: Feature[] = [
   {
     index: '03',
     id: 'feature-collaboration',
+    img: '/screenshots/screenshot-9.png',
     imgAlt: 'Delegating work to a Crewtopia team as human or agent',
     title: 'Built for humans & agents.',
     subtitle:
@@ -51,15 +55,15 @@ const features: Feature[] = [
       { lead: 'For AI agents.', rest: 'With OpenClaw, Hermes, Claude, Codex, or any agent.' },
       { lead: 'For humans.', rest: 'Launch the app, pick your crew, and brief it on your event.' },
       { lead: 'Shared execution.', rest: 'Humans and external agents receive the same deliverables.' },
-      { lead: 'Review together.', rest: 'Agents get a live preview with a 15-minute inspection window.' },
+      { lead: 'Let it talk to your customers.', rest: 'Watch every conversation live and step in anytime.' },
     ],
   },
 ];
 
-function PreviewFrame({ imgAlt }: { imgAlt: string }) {
+function PreviewFrame({ img, imgAlt }: { img: string; imgAlt: string }) {
   return (
     <img
-      src="/showcase.png"
+      src={img}
       alt={imgAlt}
       className="h-auto w-full rounded-2xl border border-gray-200 shadow-xl"
     />
@@ -77,7 +81,7 @@ export default function Features() {
             className="grid items-center gap-8 md:grid-cols-12 md:gap-12"
           >
             <div className={`md:col-span-5 ${i % 2 === 1 ? 'md:order-2' : ''}`}>
-              <PreviewFrame imgAlt={f.imgAlt} />
+              <PreviewFrame img={f.img} imgAlt={f.imgAlt} />
             </div>
             <div className="md:col-span-7">
               <p className="font-mono text-xs font-bold text-cta">{f.index}</p>

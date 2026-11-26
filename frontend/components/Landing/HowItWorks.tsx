@@ -36,7 +36,7 @@ export default function HowItWorks() {
           <span className="font-bold">Aria</span>{' '}
           <span className="text-ink">· We&apos;re live. Share this with your audience.</span>
           <span className="mt-3 block rounded-xl border border-dashed border-navy/30 bg-white px-4 py-3 font-mono text-xs font-semibold text-navy">
-            crewtopia.xyz/voice/g/bnb-bkk-meetup
+            crewtopia.co/voice/g/bnb-bkk-meetup
           </span>
         </div>
         <div className="ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-md bg-cta px-5 py-3.5 text-sm font-semibold text-navy">
