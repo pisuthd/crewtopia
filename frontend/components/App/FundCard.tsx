@@ -12,7 +12,6 @@ import {
   createEscrowJob,
   explorerTx,
   fundJob,
-  getUAllowance,
   getUBalance,
   parseStatus,
   registerAndBudget,
@@ -64,11 +63,7 @@ export default function FundCard({ pending, onFunded, onCleared }: FundCardProps
   const [tx, setTx] = useState<string | null>(null);
   const [balance, setBalance] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [debug, setDebug] = useState<string[]>([]);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const dlog = (line: string) =>
-    setDebug((d) => [...d.slice(-49), `${new Date().toISOString().slice(11, 19)} ${line}`]);
 
   // Already funded on-chain (card reopened after funding, or a stale pending):
   // never offer fund again — fund() reverts WrongStatus on funded jobs.
@@ -87,16 +82,6 @@ export default function FundCard({ pending, onFunded, onCleared }: FundCardProps
   useEffect(() => {
     if (address) getUBalance(address).then(setBalance).catch(() => {});
   }, [address]);
-
-  // Debug snapshot: who the card thinks is funding what.
-  useEffect(() => {
-    const bound = token ? tokenSubject(token) : null;
-    dlog(`wallet=${address ?? 'none'} bound=${bound ?? 'none'} jobId=${jobId ?? pending.jobId ?? 'none'} task=${pending.taskId.slice(0, 8)} totalWei=${pending.totalWei}`);
-    if (address) {
-      getUAllowance(address).then((a) => dlog(`allowance U -> escrow: ${a}`)).catch((e) => dlog(`allowance read failed: ${String(e).slice(0, 80)}`));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [address, token]);
 
   useEffect(() => () => {
     if (pollRef.current) clearInterval(pollRef.current);
@@ -197,25 +182,17 @@ export default function FundCard({ pending, onFunded, onCleared }: FundCardProps
           const escrow = artifacts.find((a: any) => a?.name === 'escrow')?.parts?.[0]?.data;
           if (!escrow?.commerce || !escrow?.description) throw new Error('accept did not return escrow params');
           params = escrow as JobParams;
-          dlog(`params ok provider=${params.provider.slice(0, 10)}… budget=${params.totalWei}`);
         } catch (acceptErr) {
           // Accept may outlive the 29s gateway clock — recover instead of dying.
-          if (token) {
-            const again = await getPendingRent(token).catch(() => null);
-            if (again?.jobId && again.taskId === pending.taskId) {
-              jid = again.jobId;
-              dlog(`recovered reported job ${jid}`);
-            } else if (again?.jobParams && again.taskId === pending.taskId) {
-              params = again.jobParams;
-              dlog('recovered unanchored params');
-            } else if (pending.renewal) {
-              const crews = await getLiveTeam(token).catch(() => []);
-              const rj = crews.find((c) => c.taskId === pending.taskId)?.renewalJobId;
-              if (rj) {
-                jid = rj;
-                dlog(`recovered renewal job ${jid}`);
-              }
-            }
+          const again = token ? await getPendingRent(token).catch(() => null) : null;
+          if (again?.jobId && again.taskId === pending.taskId) {
+            jid = again.jobId;
+          } else if (again?.jobParams && again.taskId === pending.taskId) {
+            params = again.jobParams;
+          } else if (pending.renewal) {
+            const crews = await getLiveTeam(token!).catch(() => []);
+            const rj = crews.find((c) => c.taskId === pending.taskId)?.renewalJobId;
+            if (rj) jid = rj;
           }
           if (!jid && !params) throw acceptErr;
         }
@@ -226,18 +203,13 @@ export default function FundCard({ pending, onFunded, onCleared }: FundCardProps
         // 3. Anchor: buyer creates the job as client, binds policy, sets budget.
         if (!params) throw new Error('missing escrow params — re-accept the quote');
         setPhase('creating');
-        dlog('createJob as buyer...');
         jid = await createEscrowJob(client, address, params);
-        dlog(`job ${jid} created (client = buyer)`);
         setJobId(jid);
         setPhase('registering');
-        dlog('registerJob + setBudget...');
         await registerAndBudget(client, address, params, BigInt(jid));
-        dlog('register + budget ok');
         // 4. Report the anchored job BEFORE funding — a slow fund
         // confirmation must never strand a FUNDED job unknown to the backend.
         setPhase('reporting');
-        dlog(`report job ${jid}...`);
         {
           const { nonce, sig } = await signTriple();
           const rep = await a2aSend({
@@ -248,29 +220,33 @@ export default function FundCard({ pending, onFunded, onCleared }: FundCardProps
             nonce,
             buyerSig: sig,
           }).catch((e) => ({ text: `report failed: ${e instanceof Error ? e.message : String(e)}` }));
-          dlog(`report: ${(rep as any).text?.slice(0, 120) ?? JSON.stringify(rep).slice(0, 120)}`);
-          if (!/recorded/i.test((rep as any).text ?? '')) {
-            throw new Error(`job report rejected: ${(rep as any).text ?? 'unknown'}`);
+          const repText = (rep as any)?.text ?? JSON.stringify(rep).slice(0, 120);
+          if (!/recorded/i.test(repText)) {
+            throw new Error(`job report rejected: ${repText.slice(0, 160)}`);
           }
         }
       }
       // 5. Approve U (only what the escrow needs).
       setPhase('approving');
-      dlog(`approve ${pending.totalWei} wei U -> escrow`);
       try {
         await approveU(client, address, amount);
-        dlog('approve ok');
       } catch (e) {
-        dlog(`approve REVERT: ${e instanceof Error ? e.message.slice(0, 160) : String(e).slice(0, 160)}`);
-        throw e;
+        throw new Error(`U approval failed in your wallet: ${e instanceof Error ? e.message.slice(0, 160) : String(e).slice(0, 160)}`);
       }
-      // 4. Dry-run fund via eth_call first — decoded revert, no gas spent.
-      dlog(`simulate fund(job=${jid} amount=${pending.totalWei})`);
+      // 6. Dry-run fund via eth_call first — surfaces the exact revert reason
+      // without spending gas.
       try {
         const sim = await simulateFund(address, BigInt(jid!), amount);
-        dlog(sim.ok ? 'simulate ok' : `simulate REVERT: ${sim.revert}${sim.raw ? ` data=${sim.raw.slice(0, 66)}` : ''}`);
+        if (!sim.ok) {
+          throw new Error(
+            `escrow simulation reverted: ${sim.revert ?? 'unknown'} — funding would fail on-chain, nothing was sent. ` +
+              `If this persists, start a fresh hire (a new quote anchors a new job for this wallet).`,
+          );
+        }
       } catch (e) {
-        dlog(`simulate error: ${e instanceof Error ? e.message.slice(0, 120) : String(e).slice(0, 120)}`);
+        if (e instanceof Error && e.message.startsWith('escrow simulation reverted')) throw e;
+        // Simulation itself errored (e.g. RPC hiccup) — proceed to the real
+        // tx; the chain is the final judge.
       }
       // 6. Fund on-chain (buyer is the job client, so this succeeds).
       setPhase('funding');
@@ -353,20 +329,6 @@ export default function FundCard({ pending, onFunded, onCleared }: FundCardProps
           {error}
         </p>
       )}
-      <details className="mt-2 rounded-lg bg-slate-50 px-3 py-2">
-        <summary className="cursor-pointer text-xs font-semibold text-wfink">Debug log ({debug.length})</summary>
-        <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-wfnavy">
-          {debug.length ? debug.join('\n') : '(no events yet)'}
-        </pre>
-        {debug.length > 0 && (
-          <button
-            onClick={() => void navigator.clipboard?.writeText(debug.join('\n')).catch(() => {})}
-            className="mt-1 text-xs font-semibold text-wfcta underline hover:no-underline"
-          >
-            Copy log
-          </button>
-        )}
-      </details>
       <button
         onClick={() => void handleFund()}
         disabled={busy || alreadyFunded}
