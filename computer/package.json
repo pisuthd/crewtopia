@@ -1,8 +1,8 @@
 {
-  "name": "wayfind-computer",
+  "name": "crewtopia-computer",
   "version": "1.1.0",
   "private": true,
-  "description": "Wayfind agent CLI + HTTP/SSE server that runs inside the cloud computer (MicroVM). Stack A: @openai/agents with opencode-shaped tools.",
+  "description": "Crewtopia agent CLI + HTTP/SSE server that runs inside the cloud computer (MicroVM). Stack A: @openai/agents with opencode-shaped tools.",
   "type": "module",
   "bin": {
     "wayfind": "./dist/cli.js"
