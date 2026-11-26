@@ -6,7 +6,7 @@ import { DynamoDBDocumentClient, GetCommand, PutCommand, ScanCommand } from '@aw
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { GetMicrovmCommand, ResumeMicrovmCommand, SuspendMicrovmCommand, TerminateMicrovmCommand } from '@aws-sdk/client-lambda-microvms';
 import { vmClient } from './a2a/clients';
-import { vmToken } from './a2a/vm';
+import { flushVmBackup, vmToken } from './a2a/vm';
 import { findLiveVmForBuyer } from './a2a/store';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -101,16 +101,29 @@ export async function sandboxVmToken(rec: SandboxRecord): Promise<string> {
 /** Terminate a sandbox VM; record stays for history (boot starts fresh). */
 export async function terminateSandboxVm(rec: SandboxRecord): Promise<string> {
   if (!rec.vm?.vmId || rec.vm.terminatedAt) return 'already gone';
+  // Flush-first: the platform does not reliably fire the terminate hook, so
+  // push the workspace BEFORE killing the VM (mirrors the suspend paths).
+  // Best-effort — a failed flush is reported, never blocks the kill.
+  // Suspended VMs are unreachable; skip straight to terminate.
+  let flushNote = '';
+  if (rec.vm.endpoint && !rec.vm.suspendedAt) {
+    try {
+      await flushVmBackup(rec.vm.vmId, rec.vm.endpoint);
+      flushNote = 'final backup flushed; ';
+    } catch (e) {
+      flushNote = `final backup FAILED (${e instanceof Error ? e.message : String(e)}); `;
+    }
+  }
   try {
     await vmClient.send(new TerminateMicrovmCommand({ microvmIdentifier: rec.vm.vmId }));
   } catch (e) {
-    return `terminate failed: ${e instanceof Error ? e.message : String(e)}`;
+    return `${flushNote}terminate failed: ${e instanceof Error ? e.message : String(e)}`;
   }
   rec.vm.terminatedAt = new Date().toISOString();
   delete rec.vm.suspendedAt;
   rec.status = 'terminated';
   await putSandbox(rec);
-  return 'terminated';
+  return `${flushNote}terminated`;
 }
 
 /** Live sandbox VM for an owner: sandbox table first, legacy rental lookup fallback. */
