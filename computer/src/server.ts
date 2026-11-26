@@ -13,7 +13,7 @@ import { loadCatalog, resolveApiKey, clearProviderCache } from './providers/prov
 import { writeKey } from './providers/keystore.js';
 import { pullWorkspace, pushWorkspace, type SyncCtx } from './cloud/sync.js';
 import { loadRules, saveRules, undoRules, canUndoRules } from './core/permissions.js';
-import { getRun, getHistory, listPendingApprovals, listPendingBotRequests,
+import { getRun, getHistory, appendVoiceTurns, listPendingApprovals, listPendingBotRequests,
   listPendingQuestions, listRuns, resolveApproval, answerBotRequest, answerQuestion, startRun, onRunSettled } from './runs/runner.js';
 import { reportUsage } from './runs/usage.js';
 import { listInstalledSkills, removeSkill, resolveSkillSource, saveSkillPreview, scanLocalSkills, validateSkillPreview } from './agent/skills.js';
@@ -449,14 +449,25 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   // Conversation ids travel percent-encoded (crew threads look like
   // `rent:{taskId}#{role}` — `:`, `#` never survive a raw path).
   const historyMatch = pathname.match(/^\/history\/([^/]+)$/);
-  if (historyMatch && method === 'GET') {
+  if (historyMatch && (method === 'GET' || method === 'POST')) {
     let cid = '';
     try {
       cid = decodeURIComponent(historyMatch[1]);
     } catch {
       return void json(res, 400, { error: 'bad conversation id' });
     }
-    return void json(res, 200, { messages: getHistory(cid, true) });
+    if (method === 'GET') {
+      return void json(res, 200, { messages: getHistory(cid, true) });
+    }
+    // Voice Talk UI flush: browser-kept call turns land in thread history
+    // (kind 'voice') so the crew — and its memory tools — can see them.
+    try {
+      const body = JSON.parse(await readBody(req)) as { turns?: Array<{ vid?: string; role?: string; text?: string; at?: string }> };
+      const { appended, skipped } = appendVoiceTurns(cid, body.turns ?? []);
+      return void json(res, 200, { ok: true, appended, skipped });
+    } catch {
+      return void json(res, 400, { error: 'Invalid JSON body' });
+    }
   }
 
   // Conversation context: usage indicator, manual compact, and reset.

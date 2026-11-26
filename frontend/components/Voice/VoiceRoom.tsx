@@ -12,6 +12,8 @@ import {
   getGuestLink,
   getLiveTeam,
   mintVoiceToken,
+  postGuestVoiceTranscript,
+  postVoiceTranscript,
   type LiveCrew,
 } from '@/lib/api';
 
@@ -53,11 +55,14 @@ function TalkSession({
   minutesLeft,
   greeting,
   getToken,
+  flushTarget,
 }: {
   teamName: string;
   minutesLeft: number;
   greeting: string;
   getToken: () => Promise<{ token: string }>;
+  /** Where call turns flush for thread history (agent + memory loop). */
+  flushTarget: { taskId: string; token: string } | { linkId: string };
 }) {
   const [lines, setLines] = useState<Line[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -67,6 +72,34 @@ function TalkSession({
   const [now, setNow] = useState(() => Date.now());
   const idRef = useRef(0);
   const startGuard = useRef(false);
+  // Transcript loopback: browser-kept lines flush into the concierge thread
+  // history (hang-up + every 10 turns) so the crew and its memory tools can
+  // see the call. Silent — Talk never waits on it.
+  const callIdRef = useRef('');
+  const sentRef = useRef(0);
+  const linesRef = useRef<Line[]>([]);
+  linesRef.current = lines;
+  const flush = useCallback(() => {
+    const unsent = linesRef.current.slice(sentRef.current);
+    if (unsent.length === 0 || !callIdRef.current) return;
+    const turns = unsent.map((l) => ({ vid: l.id, who: l.who, text: l.text, at: l.at }));
+    const done = (n: number) => {
+      sentRef.current += n;
+    };
+    if ('linkId' in flushTarget) {
+      void postGuestVoiceTranscript(flushTarget.linkId, callIdRef.current, turns)
+        .then(() => done(turns.length))
+        .catch(() => {});
+    } else {
+      void postVoiceTranscript(flushTarget.token, flushTarget.taskId, callIdRef.current, turns)
+        .then(() => done(turns.length))
+        .catch(() => {});
+    }
+  }, [flushTarget]);
+
+  useEffect(() => {
+    if (lines.length - sentRef.current >= 10) flush();
+  }, [lines, flush]);
 
   useEffect(() => {
     if (!connectedAt) return;
@@ -83,11 +116,14 @@ function TalkSession({
 
   const conversation = useConversation({
     onConnect: () => {
+      callIdRef.current = crypto.randomUUID();
+      sentRef.current = 0;
       setConnectedAt(Date.now());
       setError(null);
       setErrorDetail(null);
     },
     onDisconnect: () => {
+      flush();
       setConnectedAt(null);
     },
     onError: (e: unknown) => {
@@ -176,6 +212,7 @@ function TalkSession({
       </div>
 
       <div className="mx-auto flex w-full max-w-2xl flex-col items-center gap-2 py-2">
+        <p className="text-[11px] text-wfink/70">Calls may be remembered to serve you better.</p>
         {!connected ? (
           <>
             <button
@@ -401,6 +438,7 @@ export default function VoiceRoom({ taskId }: { taskId: string }) {
           minutesLeft={crew.minutesLeft}
           greeting={DEFAULT_GREETING}
           getToken={async () => mintVoiceToken(token!, taskId)}
+          flushTarget={{ taskId, token: token! }}
         />
       </ConversationProvider>
       <ShareBlock token={token!} taskId={taskId} />

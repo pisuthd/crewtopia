@@ -320,6 +320,63 @@ interface HistoryLine {
   kind?: string;
 }
 
+/** Voice-call turns appended from the Talk UI (browser state would otherwise
+ * evaporate on hang-up). Stored as user/assistant lines with kind 'voice' so
+ * thread digests and chat history pick them up; `vid` (`callId:idx`)
+ * dedupes retries. Max 200 turns / 2k chars each per call. */
+export function appendVoiceTurns(
+  conversationId: string,
+  turns: Array<{ vid?: string; role?: string; text?: string; at?: string }>,
+): { appended: number; skipped: number } {
+  if (!conversationId || !Array.isArray(turns)) return { appended: 0, skipped: 0 };
+  const seen = new Set<string>();
+  try {
+    const raw = readFileSync(convoPath(), 'utf8');
+    for (const line of raw.split('\n')) {
+      if (!line.includes('"kind":"voice"')) continue;
+      try {
+        const m = JSON.parse(line) as { conversationId?: string; vid?: string };
+        if (m.conversationId === conversationId && typeof m.vid === 'string') seen.add(m.vid);
+      } catch {
+        // ignore malformed lines
+      }
+    }
+  } catch {
+    // no history yet — nothing to dedupe against
+  }
+  mkdirSync(WORKSPACE_DIR, { recursive: true });
+  let appended = 0;
+  let skipped = 0;
+  for (const t of turns.slice(0, 200)) {
+    const vid = typeof t.vid === 'string' ? t.vid.slice(0, 120) : '';
+    const role = t.role === 'assistant' ? 'assistant' : 'user';
+    const text = typeof t.text === 'string' ? t.text.slice(0, 2000).trim() : '';
+    if (!text) {
+      skipped += 1;
+      continue;
+    }
+    if (vid && seen.has(vid)) {
+      skipped += 1;
+      continue;
+    }
+    if (vid) seen.add(vid);
+    appendFileSync(
+      convoPath(),
+      JSON.stringify({
+        runId: `voice:${vid || 'line'}`,
+        role,
+        text,
+        at: typeof t.at === 'string' ? t.at : new Date().toISOString(),
+        conversationId,
+        kind: 'voice',
+        ...(vid ? { vid } : {}),
+      }) + '\n',
+    );
+    appended += 1;
+  }
+  return { appended, skipped };
+}
+
 /** Transcript lines for one conversation (user/assistant/tool only).
  * Child runs (parentId set) are internal — their oriented prompts and raw
  * outputs stay in the raw JSONL for audit but never render as chat.

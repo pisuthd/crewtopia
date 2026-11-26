@@ -53,6 +53,7 @@ export default function GuestVoiceRoom({ linkId }: { linkId: string }) {
           minutesLeft={cfg.minutesLeft}
           greeting={cfg.greeting ?? DEFAULT_GREETING}
           getToken={async () => mintGuestVoiceToken(linkId)}
+          flushTarget={{ linkId }}
         />
       </ConversationProvider>
     </main>

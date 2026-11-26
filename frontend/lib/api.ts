@@ -319,6 +319,38 @@ export async function mintGuestVoiceToken(linkId: string): Promise<{ token: stri
   return { token: String(out.token), engineId: String(out.engineId ?? ''), maxDurationSeconds: Number(out.maxDurationSeconds ?? 600) };
 }
 
+export interface VoiceTurn {
+  vid: number;
+  who: 'you' | 'aria';
+  text: string;
+  at: string;
+}
+
+/** Talk UI flush: browser-kept call turns land in thread history. Silent by design. */
+export async function postVoiceTranscript(
+  token: string,
+  taskId: string,
+  callId: string,
+  turns: VoiceTurn[],
+): Promise<void> {
+  await api('/rent/io/voice/transcript', token, {
+    method: 'POST',
+    body: JSON.stringify({ taskId, callId, turns }),
+  });
+}
+
+/** Guest Talk UI flush: link id IS the credential. Silent by design. */
+export async function postGuestVoiceTranscript(
+  linkId: string,
+  callId: string,
+  turns: VoiceTurn[],
+): Promise<void> {
+  await api('/rent/io/voice/guest-transcript', null, {
+    method: 'POST',
+    body: JSON.stringify({ linkId, callId, turns }),
+  });
+}
+
 /** Reset one member thread's model session (transcript stays readable). */
 export async function clearCrewContext(
   token: string,

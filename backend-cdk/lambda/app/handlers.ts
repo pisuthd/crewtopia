@@ -593,6 +593,72 @@ export async function handleGuestVoiceToken(params: Record<string, string | unde
   }
 }
 
+/** Talk UI flush — browser-kept call turns land in the concierge thread
+ * history (kind 'voice') so the crew and its memory tools can see them.
+ * Best-effort relay: failures are 502s the client silently ignores. */
+async function relayVoiceTurns(
+  task: any,
+  owner: string,
+  callId: string,
+  turns: Array<{ vid?: string; who?: string; text?: string; at?: string }>,
+): Promise<{ statusCode: number; body: any }> {
+  if (!callId || turns.length === 0) return { statusCode: 400, body: { error: 'needs { callId, turns[] }' } };
+  const role = String(task.roster?.[0]?.role ?? 'concierge').toLowerCase();
+  const sb = await resolveSandboxVm(owner.toLowerCase()).catch(() => null);
+  if (!sb) return { statusCode: 502, body: { error: 'sandbox unreachable' } };
+  let tokenStr: string;
+  try {
+    tokenStr = await vmToken(sb.vmId);
+  } catch {
+    return { statusCode: 502, body: { error: 'sandbox auth failed' } };
+  }
+  const cid = `rent:${task.taskId}#${role}`;
+  const payload = {
+    turns: turns.slice(0, 200).map((t, i) => ({
+      vid: `${callId}:${typeof t.vid === 'string' && t.vid ? t.vid : i}`,
+      role: t.who === 'aria' ? 'assistant' : 'user',
+      text: String(t.text ?? '').slice(0, 2000),
+      at: t.at,
+    })),
+  };
+  try {
+    const res = await fetch(`https://${sb.endpoint}/history/${encodeURIComponent(cid)}`, {
+      method: 'POST',
+      headers: { 'X-aws-proxy-auth': tokenStr, 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(20_000),
+    });
+    const out: any = await res.json().catch(() => ({}));
+    if (!res.ok) return { statusCode: 502, body: { error: 'history append failed' } };
+    return { statusCode: 200, body: { ok: true, appended: out.appended ?? 0, skipped: out.skipped ?? 0 } };
+  } catch (e) {
+    return { statusCode: 502, body: { error: `history append failed: ${e instanceof Error ? e.message : String(e)}` } };
+  }
+}
+
+/** POST /rent/io/voice/transcript (session-authed, buyer only). */
+export async function handleVoiceTranscript(address: string, body: any) {
+  const owner = address.toLowerCase();
+  const taskId = String(body?.taskId ?? '');
+  if (!taskId) return { statusCode: 400, body: { error: 'needs { taskId, callId, turns[] }' } };
+  const { getTask } = await import('../a2a/store');
+  const task: any = await getTask(taskId).catch(() => null);
+  if (!task || !task.buyer || String(task.buyer).toLowerCase() !== owner) {
+    return { statusCode: 404, body: { error: 'unknown rental' } };
+  }
+  if (task.status !== 'working') return { statusCode: 409, body: { error: 'rental is not live' } };
+  return relayVoiceTurns(task, owner, String(body?.callId ?? ''), body?.turns);
+}
+
+/** POST /rent/io/voice/guest-transcript (public, linkId credential). */
+export async function handleGuestVoiceTranscript(body: any) {
+  const linkId = String(body?.linkId ?? '');
+  if (!linkId) return { statusCode: 400, body: { error: 'needs { linkId, callId, turns[] }' } };
+  const { findTaskByGuestLink } = await import('../a2a/store');
+  const task: any = await findTaskByGuestLink(linkId).catch(() => null);
+  if (!task) return { statusCode: 404, body: { error: 'unknown or expired link' } };
+  return relayVoiceTurns(task, String(task.buyer), String(body?.callId ?? ''), body?.turns);
+}
 /** GET /rent/io/voice/guest-config?linkId= (public): team display + greeting
  * for the guest page. No secrets, no transcript. */
 export async function handleGuestVoiceConfig(params: Record<string, string | undefined>) {
