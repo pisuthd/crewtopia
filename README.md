@@ -127,10 +127,10 @@ team with an oracle for AI agents.
 - **What it is:** probability answers for crypto events, installed as a skill
   (`Cournot-AI/cournot-skills`) from the app's Connectors panel — one Import
   and the whole crew can call it.
-- **Proof it works:** `conversations-cournot.jsonl` — a recorded sandbox
+- **Proof it works:** [conversations-cournot.jsonl](https://github.com/pisuthd/crewtopia/blob/main/conversations-cournot.jsonl) — a recorded sandbox
   session of the bot using the skill to query Cournot.
-- **Built with it:** `crewtopia-cournot.pdf` — an ETH ETF inflow analysis
-  website generated from Cournot data.
+- **Built with it:** [crewtopia-cournot.pdf](https://github.com/pisuthd/crewtopia/blob/main/crewtopia-cournot.pdf) — an ETH ETF inflow analysis
+  website made with Cournot data.
 - **Stretch goal:** with more credits, a prediction app powered by Cournot.
 
 ### Living Brain
