@@ -294,7 +294,7 @@ export async function findPendingByBuyer(buyer: string): Promise<StoredTask | nu
     }),
   );
   const items = ((found.Items ?? []) as StoredTask[]).filter(
-    (t) => t.quote && ((t.status === 'submitted' && !t.jobId) || (t.status === 'funding' && !!t.jobId)),
+    (t) => t.quote && ((t.status === 'submitted' && !t.jobId) || (t.status === 'funding' && (!!t.jobId || !!t.jobParams))),
   );
   items.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
   return items[0] ?? null;

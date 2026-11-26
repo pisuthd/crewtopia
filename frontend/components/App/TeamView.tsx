@@ -11,7 +11,12 @@ import type { MemberMeta } from './crew';
 import type { LiveCrew } from '@/lib/api';
 import { loadPendingFeedback, type PendingFeedback } from '@/lib/feedback';
 
-const TEAM_DISPLAY: Record<string, string> = { 'dev-crew': 'Dev Crew', 'voice-crew': 'Voice Crew' };
+const TEAM_DISPLAY: Record<string, string> = {
+  'dev-crew': 'Dev Crew',
+  'voice-crew': 'Voice Crew',
+  'crewtopia-dev-crew': 'Dev Crew',
+  'crewtopia-voice-crew': 'Voice Crew',
+};
 
 interface TeamViewProps {
   memberTaskId: string | null;
@@ -27,9 +32,18 @@ export default function TeamView({ memberTaskId, memberRole, memberMeta, roster,
   const [panelOpen, setPanelOpen] = useState(false);
   const [pending, setPending] = useState<PendingFeedback | null>(null);
   // Post-rental rating: crews vanish from /rent/team once ended, so the
-  // pending prompt (saved at end-rental) is the trigger, not live state.
+  // pending prompt (saved at end-rental, cleared on submit/skip) is the
+  // trigger, not live state. Poll while crewless: the end can land when no
+  // crew transition fires (nothing selected), and the effect alone would
+  // never pick it up.
   useEffect(() => {
-    setPending(crew ? null : loadPendingFeedback());
+    if (crew) {
+      setPending(null);
+      return;
+    }
+    setPending(loadPendingFeedback());
+    const t = setInterval(() => setPending(loadPendingFeedback()), 5000);
+    return () => clearInterval(t);
   }, [crew]);
   // Voice entry: voice crews only, and only on ticked-mic threads (concierge by default).
   const canTalk =

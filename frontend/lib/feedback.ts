@@ -7,6 +7,9 @@ import { keccak256, stringToHex, type WalletClient } from 'viem';
 export const TEAM_AGENT_ID: Record<string, number> = {
   'dev-crew': 2919,
   'voice-crew': 2920,
+  // Agent-name aliases (old tasks + crewTeamId fallback use these).
+  'crewtopia-dev-crew': 2919,
+  'crewtopia-voice-crew': 2920,
 };
 
 export const REPUTATION_REGISTRY = '0x8004B663056A597Dffe9eCcC1965A193B7388713' as const;
