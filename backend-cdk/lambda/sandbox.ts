@@ -297,6 +297,45 @@ export const handler: APIGatewayProxyHandler = async (event) => {
   // gateway clock; callers poll record state. computerId is wallet-stable so
   // terminate → new VM restores the same backup.
   const raw = event as any;
+  // terminate-sandbox / terminate-task-vm: async flush-first VM kill, fired
+  // by the app terminate route. The route 202s immediately (29s gateway
+  // clock); this runs the slow backup flush + platform terminate here.
+  if (raw.internal === true && !raw.httpMethod && (raw.action === 'terminate-sandbox' || raw.action === 'terminate-task-vm')) {
+    const { terminateSandboxVm, getSandbox } = await import('./sandboxStore');
+    const { flushVmBackup, terminateVm } = await import('./a2a/vm');
+    try {
+      if (raw.action === 'terminate-sandbox') {
+        const rec = await getSandbox(String(raw.wallet ?? '').toLowerCase()).catch(() => null);
+        if (rec?.vm?.vmId && !rec.vm.terminatedAt && rec.vm.endpoint && !rec.vm.suspendedAt) {
+          try {
+            await flushVmBackup(rec.vm.vmId, rec.vm.endpoint);
+            console.log(`[sandbox] pre-terminate flush ok (computer ${rec.computerId})`);
+          } catch (e) {
+            console.error(`[sandbox] pre-terminate flush failed, terminating anyway: ${e instanceof Error ? e.message : String(e)}`);
+          }
+        }
+        if (rec) await terminateSandboxVm(rec).catch((e: Error) => console.error(`[sandbox] async terminate failed: ${e.message}`));
+      } else {
+        const { getTask, putTask } = await import('./a2a/store');
+        const task = await getTask(String(raw.task_id ?? '')).catch(() => null);
+        if (task?.vm?.vmId && !task.vm.terminatedAt && task.vm.endpoint && !task.vm.suspendedAt) {
+          try {
+            await flushVmBackup(task.vm.vmId, task.vm.endpoint);
+            console.log(`[sandbox] pre-terminate flush ok (task ${task.taskId})`);
+          } catch (e) {
+            console.error(`[sandbox] pre-terminate flush failed, terminating anyway: ${e instanceof Error ? e.message : String(e)}`);
+          }
+        }
+        if (task && task.vm && !task.vm.terminatedAt) {
+          await terminateVm(task).catch(() => null);
+          await putTask(task).catch(() => null);
+        }
+      }
+    } catch (e) {
+      console.error(`[sandbox] async terminate error: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    return ok({ terminated: true });
+  }
   if (raw.internal === true && !raw.httpMethod && (raw.action === 'boot-sandbox' || raw.action === 'resume-sandbox' || raw.action === 'start-crew')) {
     const wallet = String(raw.wallet ?? '').toLowerCase();
     console.log(`[sandbox] internal action=${raw.action} wallet=${wallet.slice(0, 10)}…`);

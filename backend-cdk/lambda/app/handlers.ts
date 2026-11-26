@@ -7,8 +7,8 @@ import { contextFor } from './context';
 import { findCrewsByBuyer, findPendingByBuyer, putTask as putA2aTask } from '../a2a/store';
 import { getTask } from '../a2a/store';
 import { suspendVm } from '../a2a/relay';
-import { terminateVm, vmToken } from '../a2a/vm';
-import { getSandbox, putSandbox, resolveSandboxVm, terminateSandboxVm } from '../sandboxStore';
+import { vmToken } from '../a2a/vm';
+import { getSandbox, putSandbox, resolveSandboxVm } from '../sandboxStore';
 import { invokeSandboxFn, microvmsClient, pollRunEvents, startMemberRun } from '../a2a/crewChat';
 
 // ---------- REST ----------
@@ -876,6 +876,11 @@ export async function handleSandboxShutdown(address: string, body: any) {
 }
 
 export async function handleSandboxTerminate(address: string, body: any) {
+  // Async by design: the backup flush can outlive the 29s gateway clock (a
+  // timed-out Lambda returns no CORS headers — browsers read that as a CORS
+  // failure). The route validates + 202s immediately; the sandbox fn runs
+  // flush-then-terminate in the background. Poll status for convergence.
+  const { invokeSandboxFn } = await import('../a2a/clients');
   const taskId = String(body?.taskId ?? '');
   if (!taskId) {
     // No task → per-wallet sandbox (option B). Record stays for history.
@@ -883,8 +888,8 @@ export async function handleSandboxTerminate(address: string, body: any) {
     if (!rec?.vm?.vmId || rec.vm.terminatedAt) {
       return { statusCode: 404, body: { error: 'no sandbox' } };
     }
-    const note = await terminateSandboxVm(rec);
-    return { statusCode: 200, body: { ok: true, state: 'terminated', note } };
+    await invokeSandboxFn('terminate-sandbox', { wallet: address.toLowerCase() });
+    return { statusCode: 202, body: { ok: true, state: 'terminating', note: 'backup flush + terminate running in background' } };
   }
   const task = await getTask(taskId);
   if (!task || !task.buyer || task.buyer.toLowerCase() !== address.toLowerCase()) {
@@ -896,20 +901,8 @@ export async function handleSandboxTerminate(address: string, body: any) {
   // Option-B rentals have no per-task VM (crew runs in the wallet sandbox),
   // so ending is bookkeeping: the clock stops, chat hard-stops, the one-team
   // slot frees. Escrow stays locked per job until expiry (claimRefund path).
-  if (!task.vm?.vmId || task.vm.terminatedAt) {
-    task.status = 'ended';
-    task.endedAt = new Date().toISOString();
-    await putA2aTask(task);
-    if ((task as any).voiceEngineId) {
-      const { teardownVoice } = await import('../voice');
-      await teardownVoice(taskId, address.toLowerCase()).catch(() => {});
-    }
-    return { statusCode: 200, body: { ok: true, state: 'ended', note: 'rental ended (no task VM to terminate)' } };
-  }
-  const note = await terminateVm(task);
-  // Ending the rental: drop it from the live roster/member chat and free the
-  // one-team slot so the buyer can hire anew. Escrow stays locked on-chain
-  // until expiry (claimRefund path unchanged).
+  // Ending is recorded NOW (clock stops at request time); the VM kill runs
+  // in the background.
   task.status = 'ended';
   task.endedAt = new Date().toISOString();
   await putA2aTask(task);
@@ -917,7 +910,11 @@ export async function handleSandboxTerminate(address: string, body: any) {
     const { teardownVoice } = await import('../voice');
     await teardownVoice(taskId, address.toLowerCase()).catch(() => {});
   }
-  return { statusCode: 200, body: { ok: true, state: 'terminated', note } };
+  if (!task.vm?.vmId || task.vm.terminatedAt) {
+    return { statusCode: 200, body: { ok: true, state: 'ended', note: 'rental ended (no task VM to terminate)' } };
+  }
+  await invokeSandboxFn('terminate-task-vm', { task_id: taskId });
+  return { statusCode: 202, body: { ok: true, state: 'terminated', note: 'rental ended; VM backup flush + terminate running in background' } };
 }
 
 /** POST /rent/sandbox/boot (session-authed): accept + provision async (poll status). */

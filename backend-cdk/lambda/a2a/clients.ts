@@ -11,6 +11,15 @@ export const vmClient = new LambdaMicrovmsClient({ region: VM_REGION });
 const lambdaClient = new LambdaClient({ region: VM_REGION });
 const SANDBOX_FN = process.env.SANDBOX_FN ?? '';
 
+/** Fire-and-forget internal sandbox action (Event invoke — no 29s clock). */
+export async function invokeSandboxFn(action: string, payload: Record<string, unknown>): Promise<void> {
+  const fn = process.env.SANDBOX_FN ?? '';
+  if (!fn) throw new Error('server misconfigured: SANDBOX_FN is not set');
+  await lambdaClient.send(
+    new InvokeCommand({ FunctionName: fn, InvocationType: 'Event', Payload: JSON.stringify({ internal: true, action, ...payload }) }),
+  );
+}
+
 /** Fire-and-forget crew boot: wallet sandbox + crew session start (async invokes). */
 export async function bootCrewSandbox(wallet: string, taskId: string): Promise<string> {
   if (!SANDBOX_FN) return 'crew boot skipped (no SANDBOX_FN)';
