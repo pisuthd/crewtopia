@@ -82,9 +82,86 @@ function toZod(schema: JsonSchema | undefined): z.ZodTypeAny {
       return z.number().int().describe(schema.description ?? '');
     case 'boolean':
       return z.boolean().describe(schema.description ?? '');
+    case 'object':
+    case 'array': {
+      // The exposed type stays unknown (Zoho guard), but the description
+      // carries the expected JSON shape so models send objects, not strings.
+      const hint = shapeHint(schema);
+      const base = (schema.description ?? '').trim();
+      const desc = hint ? `${base}${base ? ' ' : ''}Expected JSON: ${hint}` : base;
+      return z.unknown().describe(desc);
+    }
     default:
       return z.unknown().describe(schema.description ?? '');
   }
+}
+
+/** Compact shape hint, e.g. `{kind: string*, content: string*, label?: string}`. */
+export function shapeHint(schema: JsonSchema, depth = 0): string {
+  if (depth > 3) return '…';
+  if (schema.type === 'array') {
+    return `[${shapeHint(schema.items ?? {}, depth + 1)}]`;
+  }
+  const props = schema.properties ?? {};
+  const keys = Object.keys(props);
+  if (keys.length === 0) return schema.type === 'object' ? '{…}' : (schema.type ?? '?');
+  const req = new Set(schema.required ?? []);
+  return `{${keys.slice(0, 8).map((k) => {
+    const v = props[k];
+    const inner = v.type === 'object' || v.type === 'array' ? shapeHint(v, depth + 1) : (v.type ?? '?');
+    return `${k}${req.has(k) ? '' : '?'}: ${inner}`;
+  }).join(', ')}${keys.length > 8 ? ', …' : ''}}`;
+}
+
+/** Coerce stringified JSON back to structured values before sending to the
+ * server: models often stringify object/array params (their field type is
+ * unknown by design). Only parses when the schema declares that shape and
+ * the string is valid JSON — otherwise the value passes through untouched
+ * and the server reports the real error. */
+function coerceValue(schema: JsonSchema | undefined, value: unknown): unknown {
+  if (value === null || value === undefined) return value;
+  const t = schema?.type;
+  if ((t === 'object' || (!t && schema?.properties)) && typeof value === 'string') {
+    try {
+      const parsed: unknown = JSON.parse(value);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return coerceObject(schema, parsed as Record<string, unknown>);
+      }
+    } catch {
+      // not JSON — pass through, server reports the real error
+    }
+    return value;
+  }
+  if (t === 'object' && typeof value === 'object' && !Array.isArray(value)) {
+    return coerceObject(schema, value as Record<string, unknown>);
+  }
+  if (t === 'array' && typeof value === 'string') {
+    try {
+      const parsed: unknown = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed.map((v) => coerceValue(schema?.items, v));
+    } catch {
+      // pass through
+    }
+    return value;
+  }
+  if (t === 'array' && Array.isArray(value)) {
+    return value.map((v) => coerceValue(schema?.items, v));
+  }
+  return value;
+}
+
+function coerceObject(schema: JsonSchema | undefined, obj: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = Array.isArray(obj) ? [...obj] as unknown as Record<string, unknown> : { ...obj };
+  const props = schema?.properties ?? {};
+  for (const [k, v] of Object.entries(out)) {
+    out[k] = coerceValue(props[k], v);
+  }
+  return out;
+}
+
+export function coerceArgs(schema: JsonSchema | undefined, args: unknown): Record<string, unknown> {
+  if (!args || typeof args !== 'object' || Array.isArray(args)) return {};
+  return coerceObject(schema, args as Record<string, unknown>);
 }
 
 export interface McpServerInfo {
@@ -418,9 +495,13 @@ export async function loadMcpTools(opts: GuardOpts): Promise<Array<ReturnType<ty
             // the run with no card (restart via restart_mcp_server).
             const live = pool.get(serverName);
             const c = live?.client && live.hash === hash ? live.client : client;
+            // Models stringify object/array params (typeless fields) — coerce
+            // back to structured values before sending; unparseable values
+            // pass through and the server reports the real error.
+            const callArgs = coerceArgs(t.inputSchema as JsonSchema | undefined, args);
             // P1: serve idempotent reads from cache; writes invalidate.
             const read = isMcpReadTool(t.name);
-            const cacheKey = read ? readCacheKey(serverName, t.name, args) : '';
+            const cacheKey = read ? readCacheKey(serverName, t.name, callArgs) : '';
             if (read) {
               const hit = readCacheGet(cacheKey);
               if (hit !== undefined) return hit;
@@ -432,7 +513,7 @@ export async function loadMcpTools(opts: GuardOpts): Promise<Array<ReturnType<ty
               const res = (await Promise.race([
                 c.callTool({
                   name: t.name,
-                  arguments: (args ?? {}) as Record<string, unknown>,
+                  arguments: callArgs,
                 }),
                 new Promise<never>((_, reject) => {
                   timer = setTimeout(
@@ -446,7 +527,7 @@ export async function loadMcpTools(opts: GuardOpts): Promise<Array<ReturnType<ty
                 content
                   .map((c) => (c.type === 'text' ? (c.text ?? '') : `[${c.type}]`))
                   .join('\n') || '(no output)';
-              if (read) readCacheSet(cacheKey, shortArgs(args), out);
+              if (read) readCacheSet(cacheKey, shortArgs(callArgs), out);
               return out;
             } finally {
               if (timer) clearTimeout(timer);
