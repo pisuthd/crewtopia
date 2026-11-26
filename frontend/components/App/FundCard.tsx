@@ -2,18 +2,25 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Check, Loader2 } from 'lucide-react';
+import { decodeErrorResult, encodeFunctionData } from 'viem';
 import { useWallet } from './WalletContext';
 import { useSession } from './SessionContext';
 import {
   a2aSend,
   approveU,
   bindMessage,
+  createEscrowJob,
   explorerTx,
   fundJob,
+  getUAllowance,
   getUBalance,
   parseStatus,
+  registerAndBudget,
+  simulateFund,
+  type JobParams,
 } from '@/lib/escrow';
 import { getLiveTeam, getPendingRent } from '@/lib/api';
+import { tokenSubject } from '@/lib/session';
 
 export interface PendingRent {
   taskId: string;
@@ -27,6 +34,8 @@ export interface PendingRent {
   token: string;
   status: string;
   jobId: string | null;
+  /** Buyer-side escrow params (issued at accept, before anchoring). */
+  jobParams?: JobParams | null;
   /** Top-up on a live rental: same task, clock extends on fund. */
   renewal?: boolean;
   baselineFundedSeconds?: number;
@@ -34,7 +43,7 @@ export interface PendingRent {
   jobStatus?: string | null;
 }
 
-type Phase = 'quote' | 'binding' | 'accepting' | 'approving' | 'funding' | 'confirming' | 'working' | 'done-accepted';
+type Phase = 'quote' | 'binding' | 'accepting' | 'creating' | 'registering' | 'approving' | 'funding' | 'reporting' | 'confirming' | 'working' | 'done-accepted';
 
 interface FundCardProps {
   pending: PendingRent;
@@ -55,7 +64,11 @@ export default function FundCard({ pending, onFunded, onCleared }: FundCardProps
   const [tx, setTx] = useState<string | null>(null);
   const [balance, setBalance] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [debug, setDebug] = useState<string[]>([]);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const dlog = (line: string) =>
+    setDebug((d) => [...d.slice(-49), `${new Date().toISOString().slice(11, 19)} ${line}`]);
 
   // Already funded on-chain (card reopened after funding, or a stale pending):
   // never offer fund again — fund() reverts WrongStatus on funded jobs.
@@ -74,6 +87,16 @@ export default function FundCard({ pending, onFunded, onCleared }: FundCardProps
   useEffect(() => {
     if (address) getUBalance(address).then(setBalance).catch(() => {});
   }, [address]);
+
+  // Debug snapshot: who the card thinks is funding what.
+  useEffect(() => {
+    const bound = token ? tokenSubject(token) : null;
+    dlog(`wallet=${address ?? 'none'} bound=${bound ?? 'none'} jobId=${jobId ?? pending.jobId ?? 'none'} task=${pending.taskId.slice(0, 8)} totalWei=${pending.totalWei}`);
+    if (address) {
+      getUAllowance(address).then((a) => dlog(`allowance U -> escrow: ${a}`)).catch((e) => dlog(`allowance read failed: ${String(e).slice(0, 80)}`));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [address, token]);
 
   useEffect(() => () => {
     if (pollRef.current) clearInterval(pollRef.current);
@@ -137,15 +160,31 @@ export default function FundCard({ pending, onFunded, onCleared }: FundCardProps
       setError('Connect a wallet first.');
       return;
     }
+    // The escrow job must be anchored by this wallet (client == caller) —
+    // funding anyone else's job reverts Unauthorized on-chain.
+    const bound = token ? tokenSubject(token) : null;
+    if (!bound || bound.toLowerCase() !== address.toLowerCase()) {
+      setError(
+        bound
+          ? `This quote belongs to ${bound.slice(0, 6)}…${bound.slice(-4)} — switch back to that wallet to fund. The escrow rejects fund calls from any other wallet.`
+          : 'Sign in first — the quote must be funded from the wallet that requested it.',
+      );
+      return;
+    }
     setError(null);
+    const signTriple = async () => {
+      const nonce = `app-${Date.now()}`;
+      const sig = await client.signMessage({ message: bindMessage(address, nonce), account: address });
+      return { nonce, sig };
+    };
     try {
       let jid = jobId;
-      if (!jid) {
+      let params: JobParams | null = pending.jobParams ?? null;
+      if (!jid && !params) {
         // 1. Bind: prove wallet ownership (EIP-191, gasless).
         setPhase('binding');
-        const nonce = `app-${Date.now()}`;
-        const sig = await client.signMessage({ message: bindMessage(address, nonce), account: address });
-        // 2. Accept: server creates the escrow job.
+        const { nonce, sig } = await signTriple();
+        // 2. Accept: server returns buyer-side escrow params (no chain writes).
         setPhase('accepting');
         try {
           const { artifacts } = await a2aSend({
@@ -156,37 +195,89 @@ export default function FundCard({ pending, onFunded, onCleared }: FundCardProps
             buyerSig: sig,
           });
           const escrow = artifacts.find((a: any) => a?.name === 'escrow')?.parts?.[0]?.data;
-          if (!escrow?.jobId) throw new Error('accept did not return a jobId');
-          jid = String(escrow.jobId);
-      } catch (acceptErr) {
-        // Accept runs 3 on-chain txs and can outlive the 29s gateway limit —
-        // the job is usually created anyway. Recover it instead of dying.
-        if (token) {
-          const again = await getPendingRent(token).catch(() => null);
-          if (again?.jobId && again.taskId === pending.taskId) {
-            jid = again.jobId;
-          } else if (pending.renewal) {
-            // Renewal jobs live on the working task, not in pending — read it there.
-            const crews = await getLiveTeam(token).catch(() => []);
-            const rj = crews.find((c) => c.taskId === pending.taskId)?.renewalJobId;
-            if (rj) jid = rj;
+          if (!escrow?.commerce || !escrow?.description) throw new Error('accept did not return escrow params');
+          params = escrow as JobParams;
+          dlog(`params ok provider=${params.provider.slice(0, 10)}… budget=${params.totalWei}`);
+        } catch (acceptErr) {
+          // Accept may outlive the 29s gateway clock — recover instead of dying.
+          if (token) {
+            const again = await getPendingRent(token).catch(() => null);
+            if (again?.jobId && again.taskId === pending.taskId) {
+              jid = again.jobId;
+              dlog(`recovered reported job ${jid}`);
+            } else if (again?.jobParams && again.taskId === pending.taskId) {
+              params = again.jobParams;
+              dlog('recovered unanchored params');
+            } else if (pending.renewal) {
+              const crews = await getLiveTeam(token).catch(() => []);
+              const rj = crews.find((c) => c.taskId === pending.taskId)?.renewalJobId;
+              if (rj) {
+                jid = rj;
+                dlog(`recovered renewal job ${jid}`);
+              }
+            }
           }
+          if (!jid && !params) throw acceptErr;
         }
-        if (!jid) throw acceptErr;
-      }
-        setJobId(jid);
         setPhase('done-accepted');
       }
-      // 3. Approve U (only what the escrow needs).
-      setPhase('approving');
       const amount = BigInt(pending.totalWei);
-      await approveU(client, address, amount);
-      // 4. Fund on-chain.
+      if (!jid) {
+        // 3. Anchor: buyer creates the job as client, binds policy, sets budget.
+        if (!params) throw new Error('missing escrow params — re-accept the quote');
+        setPhase('creating');
+        dlog('createJob as buyer...');
+        jid = await createEscrowJob(client, address, params);
+        dlog(`job ${jid} created (client = buyer)`);
+        setJobId(jid);
+        setPhase('registering');
+        dlog('registerJob + setBudget...');
+        await registerAndBudget(client, address, params, BigInt(jid));
+        dlog('register + budget ok');
+        // 4. Report the anchored job BEFORE funding — a slow fund
+        // confirmation must never strand a FUNDED job unknown to the backend.
+        setPhase('reporting');
+        dlog(`report job ${jid}...`);
+        {
+          const { nonce, sig } = await signTriple();
+          const rep = await a2aSend({
+            skill: 'crew-report-job',
+            task_id: pending.taskId,
+            job_id: jid,
+            buyerAddress: address,
+            nonce,
+            buyerSig: sig,
+          }).catch((e) => ({ text: `report failed: ${e instanceof Error ? e.message : String(e)}` }));
+          dlog(`report: ${(rep as any).text?.slice(0, 120) ?? JSON.stringify(rep).slice(0, 120)}`);
+          if (!/recorded/i.test((rep as any).text ?? '')) {
+            throw new Error(`job report rejected: ${(rep as any).text ?? 'unknown'}`);
+          }
+        }
+      }
+      // 5. Approve U (only what the escrow needs).
+      setPhase('approving');
+      dlog(`approve ${pending.totalWei} wei U -> escrow`);
+      try {
+        await approveU(client, address, amount);
+        dlog('approve ok');
+      } catch (e) {
+        dlog(`approve REVERT: ${e instanceof Error ? e.message.slice(0, 160) : String(e).slice(0, 160)}`);
+        throw e;
+      }
+      // 4. Dry-run fund via eth_call first — decoded revert, no gas spent.
+      dlog(`simulate fund(job=${jid} amount=${pending.totalWei})`);
+      try {
+        const sim = await simulateFund(address, BigInt(jid!), amount);
+        dlog(sim.ok ? 'simulate ok' : `simulate REVERT: ${sim.revert}${sim.raw ? ` data=${sim.raw.slice(0, 66)}` : ''}`);
+      } catch (e) {
+        dlog(`simulate error: ${e instanceof Error ? e.message.slice(0, 120) : String(e).slice(0, 120)}`);
+      }
+      // 6. Fund on-chain (buyer is the job client, so this succeeds).
       setPhase('funding');
       const hash = await fundJob(client, address, BigInt(jid!), amount);
       setTx(hash);
       getUBalance(address).then(setBalance).catch(() => {});
-      // 5. Renewals credit onto the live clock (already WORKING); fresh hires
+      // 7. Renewals credit onto the live clock (already WORKING); fresh hires
       // wait for the WORKING flip (lazy on-chain verification flips it, auto-boot fires).
       if (pending.renewal) {
         pollUntilCredited(pending.taskId, pending.baselineFundedSeconds ?? 0);
@@ -227,7 +318,10 @@ export default function FundCard({ pending, onFunded, onCleared }: FundCardProps
   const busy = !['quote', 'done-accepted'].includes(phase);
   const phaseLabel: Record<string, string> = {
     binding: 'Sign the binding in your wallet…',
-    accepting: 'Creating the escrow job…',
+    accepting: 'Getting escrow params…',
+    creating: 'Creating the escrow job as buyer…',
+    registering: 'Binding policy + budget…',
+    reporting: 'Recording the job…',
     approving: 'Approving $U in your wallet…',
     funding: 'Sign the fund transaction…',
     confirming: 'Confirming on-chain…',
@@ -259,6 +353,20 @@ export default function FundCard({ pending, onFunded, onCleared }: FundCardProps
           {error}
         </p>
       )}
+      <details className="mt-2 rounded-lg bg-slate-50 px-3 py-2">
+        <summary className="cursor-pointer text-xs font-semibold text-wfink">Debug log ({debug.length})</summary>
+        <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-wfnavy">
+          {debug.length ? debug.join('\n') : '(no events yet)'}
+        </pre>
+        {debug.length > 0 && (
+          <button
+            onClick={() => void navigator.clipboard?.writeText(debug.join('\n')).catch(() => {})}
+            className="mt-1 text-xs font-semibold text-wfcta underline hover:no-underline"
+          >
+            Copy log
+          </button>
+        )}
+      </details>
       <button
         onClick={() => void handleFund()}
         disabled={busy || alreadyFunded}

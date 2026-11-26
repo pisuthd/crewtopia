@@ -33,7 +33,19 @@ function acceptSkill() {
     id: 'accept-web3-quote',
     name: 'Accept a rental quote',
     description:
-      'Send {"skill": "accept-web3-quote", "task_id": "<uuid>", "buyerAddress": "<your wallet>", "nonce": "<unique>", "buyerSig": "<EIP-191 sig>"} to accept the quoted rental total. The team creates the ERC-8183 escrow job (provider = team wallet) and returns { jobId, priceWei, token } — fund it on-chain, then track with web3-task-status until WORKING.',
+      'Send {"skill": "accept-web3-quote", "task_id": "<uuid>", "buyerAddress": "<your wallet>", "nonce": "<unique>", "buyerSig": "<EIP-191 sig>"} to accept the quoted rental total. Returns buyer-side escrow params (commerce/router/policy/provider, expiredAt, description, budget) — anchor the job from YOUR wallet via createJob on the commerce contract (you become the job client), then registerJob + setBudget, approve the U budget, fund, and report via crew-report-job. Track with web3-task-status until WORKING.',
+    tags: ['web3', 'escrow', 'erc8183', 'bnb-chain'],
+    inputModes: ['application/json'],
+    outputModes: ['application/json'],
+  };
+}
+
+function reportSkill() {
+  return {
+    id: 'crew-report-job',
+    name: 'Report an anchored escrow job',
+    description:
+      'Send {"skill": "crew-report-job", "task_id": "<uuid>", "job_id": "<uint>", "buyerAddress": "<your wallet>", "nonce": "<unique>", "buyerSig": "<EIP-191 sig>"} after anchoring the escrow job from your wallet. The team validates on-chain (client == buyer, provider matches, budget covered) and records it — then fund it and track with web3-task-status until WORKING.',
     tags: ['web3', 'escrow', 'erc8183', 'bnb-chain'],
     inputModes: ['application/json'],
     outputModes: ['application/json'],
@@ -57,7 +69,7 @@ function extendSkill() {
     id: 'crew-extend',
     name: 'Top up a live rental',
     description:
-      'Send {"skill": "crew-extend", "task_id": "<uuid>", "minutes": <number>, "buyerAddress": "<your wallet>", "nonce": "<unique>", "buyerSig": "<EIP-191 sig>"} to top up a WORKING rental. Returns a renewal quote — then call accept-web3-quote with the same task_id (+ same buyer triple) to mint the renewal escrow job, fund it on-chain, and the clock extends once FUNDED is observed.',
+      'Send {"skill": "crew-extend", "task_id": "<uuid>", "minutes": <number>, "buyerAddress": "<your wallet>", "nonce": "<unique>", "buyerSig": "<EIP-191 sig>"} to top up a WORKING rental. Returns a renewal quote — then call accept-web3-quote with the same task_id (+ same buyer triple) for renewal escrow params, anchor + fund the renewal job from your wallet, report via crew-report-job, and the clock extends once FUNDED is observed.',
     tags: ['web3', 'escrow', 'erc8183', 'renewal'],
     inputModes: ['application/json'],
     outputModes: ['application/json'],
@@ -107,7 +119,7 @@ function buildCard(team: TeamDef) {
     description:
       team.description +
       (hireable
-        ? ` Flat ${team.rateUPerHour} U/hour, billed in 6-min chunks. Send negotiate-web3-task with a brief (+ optional minutes, budgetU cap) to receive a rental quote in U; fund the ERC-8183 escrow job and the team builds it. Top up live rentals with crew-extend, end early with crew-end. Track with web3-task-status. Disputes go directly on-chain against the escrow job within the dispute window — no skill needed.`
+        ? ` Flat ${team.rateUPerHour} U/hour, billed in 6-min chunks. Send negotiate-web3-task with a brief (+ optional minutes, budgetU cap) to receive a rental quote in U; anchor the escrow job from your wallet, fund it, and the team builds it. Top up live rentals with crew-extend, end early with crew-end. Track with web3-task-status. Disputes go directly on-chain against the escrow job within the dispute window — no skill needed.`
         : ' Coming soon — not rentable yet.'),
     url: `${BASE}/a2a`,
     preferredTransport: 'JSONRPC',
@@ -129,6 +141,7 @@ function buildCard(team: TeamDef) {
     ? [
         negotiateSkill(team),
         acceptSkill(),
+        reportSkill(),
         statusSkill(),
         threadSkill(),
         extendSkill(),

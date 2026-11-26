@@ -48,6 +48,6 @@ export async function handleExtend(id: unknown, data: any) {
     chunks: quote.chunks,
     totalU: quote.totalU,
     totalWei: quote.totalWei,
-    next: `Call accept-web3-quote with this task_id (+ same buyer triple) to mint the renewal escrow job, fund it on-chain, and the rental clock extends once FUNDED is observed.`,
+    next: `Call accept-web3-quote with this task_id (+ same buyer triple) for renewal escrow params, anchor + fund the renewal job from your wallet, report via crew-report-job, and the rental clock extends once FUNDED is observed.`,
   });
 }

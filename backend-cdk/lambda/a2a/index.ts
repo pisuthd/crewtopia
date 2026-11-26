@@ -4,6 +4,7 @@ import { rpcError } from './rpc';
 import { handleReceipt } from './receipt';
 import { handleNegotiate } from './negotiate';
 import { handleAccept, handleAcceptFinish } from './accept';
+import { handleReportJob } from './report';
 import { handleStatus } from './status';
 import { handleDeliver } from './deliver';
 import { handleThread } from './thread';
@@ -11,10 +12,12 @@ import { handleVoiceLink } from './voiceLink';
 import { handleExtend } from './extend';
 import { handleEnd } from './end';
 
-// Phase 3: escrow handshake. negotiate → quote; accept → server (provider)
-// creates the ERC-8183 job (create/register/setBudget); buyer funds on-chain;
-// status lazily verifies FUNDED and flips the task to WORKING. Submit/settle
-// (team-side delivery) land here next — approval-gated.
+// Phase 3: escrow handshake. negotiate → quote; accept → buyer-side job
+// params; buyer anchors the ERC-8183 job from their wallet (create/register/
+// setBudget/fund — client is always the caller, so only the buyer can fund);
+// crew-report-job records the job after onchain validation; status lazily
+// verifies FUNDED and flips the task to WORKING. Submit/settle (team-side
+// delivery) land here next — approval-gated.
 
 export const handler: APIGatewayProxyHandler = async (event) => {
   // Internal async work (IAM-gated Invoke): accept-finish runs the escrow
@@ -52,6 +55,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
 
   if (data.skill === 'negotiate-web3-task') return handleNegotiate(id, message, data);
   if (data.skill === 'accept-web3-quote') return handleAccept(id, data);
+  if (data.skill === 'crew-report-job') return handleReportJob(id, data);
   if (data.skill === 'web3-task-status') return handleStatus(id, data);
   if (data.skill === 'web3-deliver') return handleDeliver(id, data);
   if (data.skill === 'crew-thread') return handleThread(id, data);

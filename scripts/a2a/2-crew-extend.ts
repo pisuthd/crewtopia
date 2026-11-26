@@ -8,6 +8,7 @@ import { bscTestnet } from "viem/chains";
 import { loadEnv, ERC8183Client, EVMWalletProvider } from "@bnbagent/sdk";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { anchorAndFund } from "./anchor";
 
 loadEnv(join(dirname(fileURLToPath(import.meta.url)), ".."));
 
@@ -39,20 +40,10 @@ async function main(): Promise<void> {
   const b0 = await bind("extend");
   const r1 = await send({ skill: "crew-extend", task_id: taskId, minutes, buyerAddress: account.address, nonce: b0.nonce, buyerSig: b0.sig });
   console.log("extend:", text(r1).slice(0, 300));
-  const jobId = r1?.result?.jobId ?? (r1?.result && (r1.result as any).jobId);
-  // accept mints the renewal job
-  const b1 = await bind("extend-accept");
-  const r2 = await send({ skill: "accept-web3-quote", task_id: taskId, buyerAddress: account.address, nonce: b1.nonce, buyerSig: b1.sig });
-  const rj = r2?.result?.artifacts?.find((a: any) => a?.name === "escrow")?.parts?.[0]?.data?.jobId ?? r2?.result?.jobId ?? jobId;
-  console.log("accept:", text(r2).slice(0, 300), "jobId=", rj);
-  if (!rj) throw new Error("no renewal job minted");
-  const quote = (r1?.result?.totalWei as string) ?? null;
-  // fund on-chain
+  // accept returns params; buyer anchors + funds the renewal job
   const buyerClient = await ERC8183Client.create({ walletProvider: new EVMWalletProvider({ password: process.env.WALLET_PASSWORD!, privateKey: rawKey }), network: "bsc-testnet" });
-  const totalWei = quote ? BigInt(quote) : BigInt((r1?.result as any)?.totalWei ?? 0);
-  if (!totalWei) throw new Error("no totalWei in renewal quote");
-  await buyerClient.fund(BigInt(rj), totalWei);
-  console.log("funded renewal job", rj);
+  const { jobId: rj } = await anchorAndFund({ send, bind, buyerClient, buyerAddress: account.address, taskId, tag: "extend-accept" });
+  console.log("accept: renewal job anchored + funded, jobId=", rj);
   for (let i = 0; i < 20; i++) {
     const r3 = await send({ skill: "web3-task-status", task_id: taskId });
     const t = text(r3);

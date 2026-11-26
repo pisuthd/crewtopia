@@ -19,6 +19,15 @@ export type StoredTask = {
   /** True when the task was created through the app's rent_quote flow. */
   viaEmber?: boolean;
   jobId: string | null;
+  /** Buyer-side escrow params issued at accept (buyer anchors the job as
+   * client — server never creates). Cleared once the job is reported. */
+  jobParams?: {
+    provider: string;
+    expiredAt: string;
+    description: string;
+    totalWei: string;
+    renewal: boolean;
+  } | null;
   /** Top-up awaiting accept/fund: extends fundedSeconds on the same task. */
   pendingRenewal?: {
     fundedSeconds: number;

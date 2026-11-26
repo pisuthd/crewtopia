@@ -28,6 +28,19 @@ export async function bootCrewSandbox(wallet: string, taskId: string): Promise<s
   }
 }
 
+/** Chain addresses the buyer needs to anchor the job themselves (buyer =
+ * job client, so only the buyer wallet can create + fund). Read-only. */
+export async function escrowAddrs(): Promise<{ commerce: string; router: string; policy: string; provider: string; token: string }> {
+  const { client, provider } = await getEscrow();
+  const anyClient = client as any;
+  const commerce: string = anyClient.commerce?.address ?? anyClient.address ?? '';
+  const router: string = anyClient.router?.address ?? '';
+  const policy: string = anyClient.policy?.address ?? '';
+  if (!commerce || !router || !policy) throw new Error('Server misconfigured: escrow addresses unresolved');
+  const token: string = await client.paymentToken();
+  return { commerce, router, policy, provider, token };
+}
+
 // Warm-start cache: chain + wallet clients survive across invocations.
 let escrowClient: ERC8183Client | null = null;
 let providerAddress = '';

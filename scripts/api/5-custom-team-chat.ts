@@ -11,9 +11,10 @@ import { createWalletClient, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { bscTestnet } from "viem/chains";
 import { api, check, finish, requireSession } from "./config.js";
-import { loadEnv } from "@bnbagent/sdk";
+import { loadEnv, ERC8183Client, EVMWalletProvider } from "@bnbagent/sdk";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { anchorAndFund } from "../a2a/anchor.js";
 
 loadEnv(join(dirname(fileURLToPath(import.meta.url)), ".."));
 
@@ -82,22 +83,15 @@ async function main() {
   const quote = (r1?.result?.artifacts ?? []).find((a: any) => a?.name === "quote")?.parts?.[0]?.data;
   check("quote is 12 min / 0.002 U", quote?.fundedSeconds === 720 && quote?.totalU === "0.002", JSON.stringify(quote));
 
-  // 3. Accept → fund on-chain → poll to WORKING (crew auto-starts in sandbox).
-  // Accept does 3 sequential chain txs behind a 29s gateway — retry gateway
-  // envelopes (no result AND no error); the backend is idempotent per task.
-  let r2: any = null;
-  for (let attempt = 0; attempt < 3 && !r2?.result && !r2?.error; attempt++) {
-    if (attempt > 0) await new Promise((r) => setTimeout(r, 15000));
-    const aNonce = `accept-${Date.now()}-${attempt}`;
-    const aSig = await signer.signMessage({ message: `Crewtopia hire binding v1\nbuyer: ${account.address}\nnonce: ${aNonce}` });
-    r2 = await send({ skill: "accept-web3-quote", task_id: taskId, buyerAddress: account.address, nonce: aNonce, buyerSig: aSig });
-  }
-  const jobId = (r2?.result?.artifacts ?? []).find((a: any) => a?.name === "escrow")?.parts?.[0]?.data?.jobId;
-  check("accept returns jobId", !!jobId, jobId ?? r2?.error?.message ?? taskText(r2).slice(0, 100) ?? "empty reply");
-  if (!jobId) throw new Error(`accept failed: ${r2?.error?.message ?? "unknown"}`);
-  const { ERC8183Client, EVMWalletProvider } = await import("@bnbagent/sdk");
+  // 3. Accept → buyer anchors + funds → poll to WORKING (crew auto-starts in sandbox).
+  const bind = async (tag: string) => {
+    const nonce = `${tag}-${Date.now()}`;
+    const sig = await signer.signMessage({ message: `Crewtopia hire binding v1\nbuyer: ${account.address}\nnonce: ${nonce}` });
+    return { nonce, sig };
+  };
   const buyerClient = await ERC8183Client.create({ walletProvider: new EVMWalletProvider({ password: process.env.WALLET_PASSWORD!, privateKey: rawKey }), network: "bsc-testnet" });
-  await buyerClient.fund(BigInt(jobId), BigInt(quote.totalWei));
+  const { jobId } = await anchorAndFund({ send, bind, buyerClient, buyerAddress: account.address, taskId, tag: "team7-acc" });
+  check("job anchored + funded", !!jobId, String(jobId));
   let t3 = "";
   for (let i = 0; i < 20; i++) {
     const r3 = await send({ skill: "web3-task-status", task_id: taskId });

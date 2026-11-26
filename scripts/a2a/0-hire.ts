@@ -6,6 +6,7 @@ import { loadEnv, ERC8183Client, EVMWalletProvider } from "@bnbagent/sdk";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { writeFileSync } from "node:fs";
+import { anchorAndFund } from "./anchor";
 
 loadEnv(join(dirname(fileURLToPath(import.meta.url)), ".."));
 const BASE = (process.env.API_BASE_URL ?? "").replace(/\/+$/, "");
@@ -33,13 +34,10 @@ async function main(): Promise<void> {
   if (!taskId) throw new Error("no task: " + text(r1).slice(0, 200));
   console.log("task:", taskId);
   const quote = (r1?.result?.artifacts ?? []).find((a: any) => a?.name === "quote")?.parts?.[0]?.data;
-  const b1 = await bind("a");
-  const r2 = await send({ skill: "accept-web3-quote", task_id: taskId, buyerAddress: account.address, nonce: b1.nonce, buyerSig: b1.sig });
-  const jobId: string | undefined = r2?.result?.artifacts?.find((a: any) => a?.name === "escrow")?.parts?.[0]?.data?.jobId ?? r2?.result?.jobId;
-  if (!jobId || !quote?.totalWei) throw new Error("accept failed: " + text(r2).slice(0, 200));
-  console.log("job:", jobId);
+  if (!quote?.totalWei) throw new Error("negotiate failed: " + text(r1).slice(0, 200));
   const buyerClient = await ERC8183Client.create({ walletProvider: new EVMWalletProvider({ password: process.env.WALLET_PASSWORD!, privateKey: process.env.PRIVATE_KEY! }), network: "bsc-testnet" });
-  await buyerClient.fund(BigInt(jobId), BigInt(quote.totalWei));
+  const { jobId, totalWei } = await anchorAndFund({ send, bind, buyerClient, buyerAddress: account.address, taskId, tag: "a" });
+  console.log("job:", jobId, "wei:", totalWei, "quoted:", quote.totalWei);
   for (let i = 0; i < 20; i++) {
     const r3 = await send({ skill: "web3-task-status", task_id: taskId });
     if (text(r3).includes("status=working")) { console.log("WORKING", taskId); writeFileSync(join(dirname(fileURLToPath(import.meta.url)), ".last-a2a-task.json"), JSON.stringify({ taskId, jobId }) + "\n"); return; }

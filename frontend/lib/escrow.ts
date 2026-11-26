@@ -1,6 +1,6 @@
 'use client';
 
-import { formatUnits, getAddress, type WalletClient } from 'viem';
+import { decodeErrorResult, encodeFunctionData, formatUnits, getAddress, parseEventLogs, type WalletClient } from 'viem';
 import { bscTestnet } from 'viem/chains';
 import { getPublicClient } from './chains';
 
@@ -15,8 +15,39 @@ const ERC20_ABI = [
 ] as const;
 
 const COMMERCE_ABI = [
+  { type: 'function', name: 'createJob', stateMutability: 'nonpayable', inputs: [{ type: 'address' }, { type: 'address' }, { type: 'uint256' }, { type: 'string' }, { type: 'address' }], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'setBudget', stateMutability: 'nonpayable', inputs: [{ type: 'uint256' }, { type: 'uint256' }, { type: 'bytes' }], outputs: [] },
   { type: 'function', name: 'fund', stateMutability: 'nonpayable', inputs: [{ type: 'uint256' }, { type: 'uint256' }, { type: 'bytes' }], outputs: [] },
+  { type: 'event', name: 'JobCreated', inputs: [{ type: 'uint256', indexed: true, name: 'jobId' }, { type: 'address', indexed: true, name: 'client' }, { type: 'address', indexed: true, name: 'provider' }, { type: 'address', indexed: false, name: 'evaluator' }, { type: 'uint256', indexed: false, name: 'expiredAt' }, { type: 'address', indexed: false, name: 'hook' }] },
+  // Zero-input custom errors (match SDK ABI) — decode-only, for debug.
+  { type: 'error', name: 'Unauthorized', inputs: [] },
+  { type: 'error', name: 'NotClient', inputs: [] },
+  { type: 'error', name: 'WrongStatus', inputs: [] },
+  { type: 'error', name: 'InvalidJob', inputs: [] },
+  { type: 'error', name: 'BudgetMismatch', inputs: [] },
+  { type: 'error', name: 'ZeroBudget', inputs: [] },
 ] as const;
+
+const ROUTER_ABI = [
+  { type: 'function', name: 'registerJob', stateMutability: 'nonpayable', inputs: [{ type: 'uint256' }, { type: 'address' }], outputs: [] },
+] as const;
+
+/** Buyer-side escrow params (from the accept skill artifact). */
+export interface JobParams {
+  commerce: `0x${string}`;
+  router: `0x${string}`;
+  policy: `0x${string}`;
+  provider: `0x${string}`;
+  evaluator: `0x${string}`;
+  hook: `0x${string}`;
+  expiredAt: string;
+  description: string;
+  totalWei: string;
+  totalU: string;
+  token: string;
+  renewal: boolean;
+  buyer: string;
+}
 
 const API = process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, '') ?? '';
 
@@ -73,6 +104,90 @@ export async function fundJob(
     account,
     gasPrice: await gasPriceBuffered(),
   });
+}
+
+/** Buyer anchors the escrow job as client (createJob on commerce). Returns jobId. */
+export async function createEscrowJob(
+  client: WalletClient,
+  account: `0x${string}`,
+  p: JobParams,
+): Promise<string> {
+  const chainId = await client.getChainId();
+  if (chainId !== bscTestnet.id) throw new Error(`wallet is on chain ${chainId} — switch to BNB Testnet and retry`);
+  const hash = await client.writeContract({
+    address: p.commerce,
+    abi: COMMERCE_ABI,
+    functionName: 'createJob',
+    args: [p.provider, p.evaluator as `0x${string}`, BigInt(p.expiredAt), p.description, p.hook as `0x${string}`],
+    chain: bscTestnet,
+    account,
+    gasPrice: await gasPriceBuffered(),
+  });
+  const receipt = await publicClient().waitForTransactionReceipt({ hash });
+  const logs = parseEventLogs({ abi: COMMERCE_ABI, logs: receipt.logs, eventName: 'JobCreated' });
+  const jobId = (logs[0] as any)?.args?.jobId;
+  if (jobId == null) throw new Error(`createJob confirmed (${hash}) but no JobCreated log — check the explorer and retry`);
+  return String(jobId);
+}
+
+/** Buyer binds the policy on the router, then sets their own budget. */
+export async function registerAndBudget(
+  client: WalletClient,
+  account: `0x${string}`,
+  p: JobParams,
+  jobId: bigint,
+): Promise<void> {
+  const chainId = await client.getChainId();
+  if (chainId !== bscTestnet.id) throw new Error(`wallet is on chain ${chainId} — switch to BNB Testnet and retry`);
+  const gasPrice = await gasPriceBuffered();
+  const h1 = await client.writeContract({
+    address: p.router, abi: ROUTER_ABI, functionName: 'registerJob',
+    args: [jobId, p.policy as `0x${string}`], chain: bscTestnet, account, gasPrice,
+  });
+  await publicClient().waitForTransactionReceipt({ hash: h1 });
+  const h2 = await client.writeContract({
+    address: p.commerce, abi: COMMERCE_ABI, functionName: 'setBudget',
+    args: [jobId, BigInt(p.totalWei), '0x'], chain: bscTestnet, account, gasPrice,
+  });
+  await publicClient().waitForTransactionReceipt({ hash: h2 });
+}
+
+/** eth_call dry-run of fund(): returns the decoded custom error (if any)
+ * without spending gas. Debug only — the real tx may still differ. */
+export async function simulateFund(
+  account: `0x${string}`,
+  jobId: bigint,
+  amountWei: bigint,
+): Promise<{ ok: boolean; revert?: string; raw?: string }> {
+  const data = encodeFunctionData({ abi: COMMERCE_ABI, functionName: 'fund', args: [jobId, amountWei, '0x'] });
+  try {
+    await publicClient().call({ account, to: COMMERCE_ADDRESS, data });
+    return { ok: true };
+  } catch (e: any) {
+    // viem nests the returndata variously — dig for the first 0x bytes.
+    const raw: string | undefined =
+      e?.cause?.data ?? e?.data?.data ?? e?.cause?.cause?.data ?? (typeof e?.cause === 'string' ? e.cause : undefined);
+    if (raw && typeof raw === 'string' && raw.startsWith('0x')) {
+      try {
+        const decoded = decodeErrorResult({ abi: COMMERCE_ABI, data: raw as `0x${string}` });
+        return { ok: false, revert: decoded.errorName, raw };
+      } catch {
+        return { ok: false, revert: `(undecodable ${raw.slice(0, 10)})`, raw };
+      }
+    }
+    return { ok: false, revert: e instanceof Error ? e.message.slice(0, 160) : String(e).slice(0, 160) };
+  }
+}
+
+/** U allowance the escrow can pull from this wallet (debug). */
+export async function getUAllowance(owner: `0x${string}`): Promise<string> {
+  const raw = (await publicClient().readContract({
+    address: U_TOKEN_ADDRESS,
+    abi: ERC20_ABI,
+    functionName: 'allowance',
+    args: [owner, COMMERCE_ADDRESS],
+  })) as bigint;
+  return formatUnits(raw, 18);
 }
 
 /** Public A2A call (no session needed) — accept quote / poll status. */

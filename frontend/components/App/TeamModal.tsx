@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowLeft, Loader2, Plus, Trash2, Users, X } from 'lucide-react';
 import ModalShell from './ModalShell';
+import Hexbot from '../Hexbot';
+import { memberMetaFor } from './crew';
 import { savePendingFeedback } from '@/lib/feedback';
 import ConfirmModal from './ConfirmModal';
 import FundCard from './FundCard';
@@ -53,7 +55,24 @@ export function activeRentalFor(rentals: LiveCrew[], teamId: string): LiveCrew |
   return rentals.find((r) => crewTeamId(r) === teamId && (r.status === 'working' || r.status === 'funding')) ?? null;
 }
 
-const MINUTE_PRESETS = [12, 30, 60, 1440, 10080];
+const MINUTE_PRESETS = [12, 30, 60, 1440];
+
+/** 'Concierge — live voice' → name for the pill, descriptor for the tooltip. */
+function splitRoleLabel(label: string): { name: string; hint: string | null } {
+  const parts = label.split(/\s*[—–]\s*|\s+-\s+/);
+  if (parts.length >= 2) return { name: parts[0].trim(), hint: parts.slice(1).join(' — ').trim() };
+  return { name: label.trim(), hint: null };
+}
+
+/** Bot names aren't in the teams list payload — mirrors backend ROSTER. */
+const BOT_NAME_BY_ROLE: Record<string, string> = {
+  pm: 'Taylor',
+  frontend: 'Reef',
+  backend: 'Moss',
+  concierge: 'Aria',
+  scout: 'Finn',
+  keeper: 'Dot',
+};
 
 /** 1440 → "1d", 10080 → "7d", else "Nm". */
 function presetLabel(m: number): string {
@@ -512,24 +531,35 @@ function TeamDetail({
       <p className="font-brico text-xl font-bold text-wfnavy">{team.name}</p>
       <p className="mt-1 text-sm text-wfink">{team.description}</p>
       <div className="mt-3 flex flex-wrap gap-1.5">
-        {(team.members ?? team.roles.map((r) => ({ role: r, name: r, title: r }))).map((m, i) => (
+        {(team.members ?? team.roles.map((r) => ({ role: r, name: r, title: r }))).map((m, i) => {
+          const meta = memberMetaFor(m.role, m.name ?? '', m.title ?? '', i);
+          // Members carry real names; static role strings carry "Role — hint".
+          const fromMembers = !!m.title && m.title !== m.name;
+          const source = (fromMembers ? m.title : m.name) ?? '';
+          const { name: roleShort, hint } = splitRoleLabel(source);
+          const displayName = fromMembers ? m.name! : (BOT_NAME_BY_ROLE[roleShort.toLowerCase()] ?? roleShort);
+          const tooltip = hint ? `${roleShort} — ${hint}` : source;
+          return (
           <span
             key={`${m.role}-${i}`}
-            className="flex items-center gap-1.5 rounded-full bg-wfice px-3 py-1 text-xs font-semibold text-wfnavy"
+            title={tooltip || undefined}
+            className="flex items-center gap-2 rounded-full bg-wfice py-0.5 pl-0.5 pr-3 text-xs font-semibold text-wfnavy"
           >
-            {m.name}{m.title && m.title !== m.name ? ` · ${m.title}` : ''}
+            <Hexbot color={meta.color} role={meta.hexRole} size="xs" label={`${displayName} hexbot`} className="shrink-0" />
+            {displayName}
             {custom && !renewCrew && (
               <button
                 onClick={() => onRemoveBot(m.role)}
-                aria-label={`Remove ${m.name}`}
-                title={`Remove ${m.name}`}
+                aria-label={`Remove ${displayName}`}
+                title={`Remove ${displayName}`}
                 className="text-wfink hover:text-red-600"
               >
                 <X className="h-3 w-3" strokeWidth={2.5} />
               </button>
             )}
           </span>
-        ))}
+          );
+        })}
         {custom && !renewCrew && (
           <button
             onClick={onAddBot}

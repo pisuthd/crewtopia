@@ -1,5 +1,7 @@
 'use client';
 
+import type { JobParams } from './escrow';
+
 const API = process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, '') ?? '';
 
 export interface ChatMessage {
@@ -44,6 +46,8 @@ export interface PendingRent {
   token: string;
   status: string;
   jobId: string | null;
+  /** Buyer-side escrow params (issued at accept, before anchoring). */
+  jobParams?: JobParams | null;
   /** On-chain status of jobId (when known) — a FUNDED job must never fund again. */
   jobStatus?: string | null;
 }

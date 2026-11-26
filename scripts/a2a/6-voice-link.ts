@@ -13,6 +13,7 @@ import { bscTestnet } from "viem/chains";
 import { ERC8183Client, EVMWalletProvider, loadEnv } from "@bnbagent/sdk";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { anchorAndFund } from "./anchor";
 
 loadEnv(join(dirname(fileURLToPath(import.meta.url)), ".."));
 
@@ -63,13 +64,10 @@ async function main(): Promise<void> {
     check("negotiate returns task_id", !!taskId, taskId);
     if (!taskId) throw new Error("no task");
     const quote = (r1?.result?.artifacts ?? []).find((a: any) => a?.name === "quote")?.parts?.[0]?.data;
-    const b1 = await bind("vlink-acc");
-    const r2 = await send({ skill: "accept-web3-quote", task_id: taskId, buyerAddress: account.address, nonce: b1.nonce, buyerSig: b1.sig });
-    const jobId = (r2?.result?.artifacts ?? []).find((a: any) => a?.name === "escrow")?.parts?.[0]?.data?.jobId ?? r2?.result?.jobId;
-    check("accept returns jobId", !!jobId, String(jobId ?? ""));
-    if (!jobId || !quote?.totalWei) throw new Error("accept failed");
+    if (!quote?.totalWei) throw new Error("negotiate failed: " + text(r1).slice(0, 200));
     const buyerClient = await ERC8183Client.create({ walletProvider: new EVMWalletProvider({ password: process.env.WALLET_PASSWORD!, privateKey: rawKey }), network: "bsc-testnet" });
-    await buyerClient.fund(BigInt(String(jobId)), BigInt(String(quote.totalWei)));
+    const { jobId } = await anchorAndFund({ send, bind, buyerClient, buyerAddress: account.address, taskId, tag: "vlink-acc" });
+    check("accept + anchor returns jobId", !!jobId, String(jobId));
     const t3 = await waitFor(taskId, /status=working/, "flip to working");
     check("funded flips to WORKING", true, t3.slice(0, 80));
   } else {

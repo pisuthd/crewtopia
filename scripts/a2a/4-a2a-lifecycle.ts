@@ -12,6 +12,7 @@ import { bscTestnet } from "viem/chains";
 import { loadEnv, ERC8183Client, EVMWalletProvider } from "@bnbagent/sdk";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { anchorAndFund } from "./anchor";
 
 loadEnv(join(dirname(fileURLToPath(import.meta.url)), ".."));
 
@@ -39,9 +40,9 @@ async function bind(tag: string) {
   return { nonce, sig };
 }
 
-async function fundJob(jobId: string, totalWei: string): Promise<void> {
+async function anchorJob(taskId: string, tag: string): Promise<{ jobId: string; totalWei: string }> {
   const buyerClient = await ERC8183Client.create({ walletProvider: new EVMWalletProvider({ password: process.env.WALLET_PASSWORD!, privateKey: rawKey }), network: "bsc-testnet" });
-  await buyerClient.fund(BigInt(jobId), BigInt(totalWei));
+  return anchorAndFund({ send, bind, buyerClient, buyerAddress: account.address, taskId, tag });
 }
 
 async function waitFor(taskId: string, want: RegExp, label: string, tries = 20): Promise<string> {
@@ -69,17 +70,9 @@ async function main(): Promise<void> {
   check("negotiate returns task_id", !!taskId, taskId);
   if (!taskId) throw new Error("no task");
   const quote = (r1?.result?.artifacts ?? []).find((a: any) => a?.name === "quote")?.parts?.[0]?.data;
-  const b1 = await bind("life-acc");
-  let r2: any = null;
-  for (let attempt = 0; attempt < 3 && !r2?.result && !r2?.error; attempt++) {
-    if (attempt > 0) await new Promise((r) => setTimeout(r, 15000));
-    const ba = await bind(`life-acc${attempt}`);
-    r2 = await send({ skill: "accept-web3-quote", task_id: taskId, buyerAddress: account.address, nonce: ba.nonce, buyerSig: ba.sig });
-  }
-  const jobId = (r2?.result?.artifacts ?? []).find((a: any) => a?.name === "escrow")?.parts?.[0]?.data?.jobId ?? r2?.result?.jobId;
-  check("accept returns jobId", !!jobId, String(jobId ?? JSON.stringify(r2?.error ?? r2?.result ?? r2).slice(0, 200)));
-  if (!jobId || !quote?.totalWei) throw new Error("accept failed");
-  await fundJob(String(jobId), String(quote.totalWei));
+  if (!quote?.totalWei) throw new Error("negotiate failed: " + text(r1).slice(0, 200));
+  const { jobId } = await anchorJob(taskId, "life-acc");
+  check("accept + anchor returns jobId", !!jobId, String(jobId));
   const t3 = await waitFor(taskId, /status=working/, "flip to working");
   check("funded flips to WORKING", true, t3.slice(0, 100));
 
@@ -113,11 +106,9 @@ async function main(): Promise<void> {
   const r5 = await send({ skill: "crew-extend", task_id: taskId, minutes: 30, buyerAddress: account.address, nonce: b3.nonce, buyerSig: b3.sig });
   const renewalWei = (r5?.result as any)?.totalWei;
   check("extend quotes renewal", !!(r5?.result as any)?.renewal, JSON.stringify(r5?.result ?? r5?.error).slice(0, 120));
-  const b4 = await bind("life-ext-acc");
-  const r6 = await send({ skill: "accept-web3-quote", task_id: taskId, buyerAddress: account.address, nonce: b4.nonce, buyerSig: b4.sig });
-  const rj = (r6?.result?.artifacts ?? []).find((a: any) => a?.name === "escrow")?.parts?.[0]?.data?.jobId ?? (r6?.result as any)?.jobId;
-  check("renewal job minted", !!rj, String(rj ?? ""));
-  if (rj && renewalWei) await fundJob(String(rj), String(renewalWei)).catch((e: Error) => console.log(`  note — renewal fund: ${e.message.slice(0, 120)}`));
+  const anchored = await anchorJob(taskId, "life-ext-acc").catch((e: Error) => ({ jobId: "", totalWei: "", error: e.message }));
+  const rj = (anchored as any).jobId ?? "";
+  check("renewal job anchored + funded", !!rj, String(rj || (anchored as any).error ?? ""));
 
   // 7. end.
   const b5 = await bind("life-end");

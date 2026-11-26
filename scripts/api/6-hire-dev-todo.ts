@@ -12,10 +12,11 @@ import { createWalletClient, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { bscTestnet } from "viem/chains";
 import { api, check, finish, requireSession } from "./config.js";
-import { loadEnv } from "@bnbagent/sdk";
+import { loadEnv, ERC8183Client, EVMWalletProvider } from "@bnbagent/sdk";
 import { dirname, join } from "node:path";
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { anchorAndFund } from "../a2a/anchor.js";
 
 loadEnv(join(dirname(fileURLToPath(import.meta.url)), ".."));
 
@@ -180,19 +181,11 @@ async function main() {
     taskId = /task_id ([0-9a-f-]{36})/.exec(taskText(r1))?.[1] ?? "";
     check("dev quote returns task_id", !!taskId, taskId ?? "");
     const quote = (r1?.result?.artifacts ?? []).find((a: any) => a?.name === "quote")?.parts?.[0]?.data;
-    const b1 = await bind("accept6");
-    let r2: any = null;
-    for (let attempt = 0; attempt < 3 && !r2?.result && !r2?.error; attempt++) {
-      if (attempt > 0) await new Promise((r) => setTimeout(r, 15000));
-      const ba = await bind(`accept6r${attempt}`);
-      r2 = await send({ skill: "accept-web3-quote", task_id: taskId, buyerAddress: account.address, nonce: ba.nonce, buyerSig: ba.sig });
-    }
-    jobId = (r2?.result?.artifacts ?? []).find((a: any) => a?.name === "escrow")?.parts?.[0]?.data?.jobId;
-    check("accept returns jobId", !!jobId, jobId ?? r2?.error?.message ?? "gateway envelope");
-    if (!jobId) throw new Error(`accept failed: ${r2?.error?.message ?? "gateway envelope, see run output"}`);
-    const { ERC8183Client, EVMWalletProvider } = await import("@bnbagent/sdk");
+    if (!quote?.totalWei) throw new Error("negotiate failed: " + taskText(r1).slice(0, 200));
     const buyerClient = await ERC8183Client.create({ walletProvider: new EVMWalletProvider({ password: process.env.WALLET_PASSWORD!, privateKey: rawKey }), network: "bsc-testnet" });
-    await buyerClient.fund(BigInt(jobId), BigInt(quote.totalWei));
+    const anchored = await anchorAndFund({ send, bind, buyerClient, buyerAddress: account.address, taskId, tag: "accept6" });
+    jobId = anchored.jobId;
+    check("job anchored + funded", !!jobId, jobId);
     let t3 = "";
     for (let i = 0; i < 20; i++) {
       const r3 = await send({ skill: "web3-task-status", task_id: taskId });
