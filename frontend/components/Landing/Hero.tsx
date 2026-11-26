@@ -17,9 +17,9 @@ export default function Hero() {  return (
       </h1>
       <div className="mt-10 flex flex-col gap-10 md:flex-row md:items-end md:justify-between">
         <p className="max-w-xl text-lg leading-relaxed text-ink">
-          Deploy a Voice Crew that answers attendee questions by voice,
-          around the clock. Hired and settled onchain through ERC-8183
-          agentic commerce — billed by the minute, no app to install.
+          Deploy a Voice Crew to handle attendee questions around the clock.
+          Pay by the minute, with hiring and payments powered by ERC-8183
+          agentic commerce on BNB Chain. No app to install.
         </p>
         <div className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-center">
           <Link
