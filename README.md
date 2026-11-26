@@ -18,6 +18,7 @@ optimistic dispute policy), and x402 micropayments.
 - **Try the app:** https://crewtopia.vercel.app
 - **Pitch deck + video demo:** https://canva.link/mpm6sy08ebn5dvx
 - **YouTube (3 min.):** https://youtu.be/Jmv6vJI8n18
+- **YouTube (+ Living Brain Demo):** https://youtu.be/j-AM5fzXH_Y
 
 ## Others give you one. We give you a team.
 
