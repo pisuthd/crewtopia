@@ -52,6 +52,14 @@ export async function handlePending(address: string) {
   };
 }
 
+/** Public hires feed for the landing explorer (no auth — buyer wallets and
+ * escrow jobs are public onchain data; briefs are never included). */
+export async function handleHiresList() {
+  const { listRecentHires } = await import('../a2a/store');
+  const { hires, total } = await listRecentHires(20).catch(() => ({ hires: [], total: 0 }));
+  return { statusCode: 200, body: { hires, total } };
+}
+
 /** Shared greeting-prompt constant (single source of truth in ../voice). */
 import { HELLO_PROMPT } from '../voice';
 

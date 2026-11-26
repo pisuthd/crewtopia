@@ -37,6 +37,52 @@ export async function putTask(task: StoredTask): Promise<void> {
   await ddb.send(new PutCommand({ TableName: TABLE, Item: task }));
 }
 
+/** Public hires feed: recent anchored rentals (funding+) for the explorer.
+ * Buyer wallets are already public onchain; briefs stay out. */
+export interface HireRow {
+  taskId: string;
+  team: string;
+  teamId: string;
+  buyer: string;
+  minutes: number;
+  totalU: string;
+  status: string;
+  jobId: string;
+  createdAt: string;
+}
+
+export async function listRecentHires(limit = 20): Promise<{ hires: HireRow[]; total: number }> {
+  const found = await ddb.send(new ScanCommand({ TableName: TABLE }));
+  const items = ((found.Items ?? []) as StoredTask[]).filter(
+    (t) => t.viaEmber && t.jobId && (t.status === 'funding' || t.status === 'working' || t.status === 'ended'),
+  );
+  items.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  const total = items.length;
+  const { resolveTeamFor } = await import('../teamStore');
+  const hires = await Promise.all(
+    items.slice(0, Math.max(1, Math.min(limit, 50))).map(async (t) => {
+      let team = t.quote?.displayName ?? t.teamId ?? 'Dev Crew';
+      try {
+        team = (await resolveTeamFor(t.teamId, t.buyer)).display;
+      } catch {
+        // keep the quote snapshot for unknown teams
+      }
+      return {
+        taskId: t.taskId,
+        team,
+        teamId: t.teamId ?? 'dev-crew',
+        buyer: (t.buyer ?? '').toLowerCase(),
+        minutes: Math.round((t.quote?.fundedSeconds ?? 0) / 60),
+        totalU: t.quote?.totalU ?? '?',
+        status: t.status,
+        jobId: t.jobId!,
+        createdAt: t.createdAt,
+      };
+    }),
+  );
+  return { hires, total };
+}
+
 /**
  * Targeted writes (Fix D). Whole-task putTask read-modify-write cycles wipe
  * each other's crewRuns (supervisor vs starter vs add-member vs renewal
