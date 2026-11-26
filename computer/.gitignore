@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.env
+*.log
+workspace/.wayfind/
+workspace/conversations.jsonl
+# Per-sandbox runtime state — never bake into the repo.
+workspace/mcp.json
+scripts/image/.computer-image-state.json
